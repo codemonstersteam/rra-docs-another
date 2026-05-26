@@ -30,7 +30,8 @@ CLI-роутер, CI. Ветка `chore/scaffold`. Подробности — `P
 
 - Один внешний вход = одна CLI-подкоманда = один slice (7 слайсов + поздний S8).
 - Роль контракта для CLI: `api-specification/cli.md` + `report.schema.json`.
-- Формулы читаемости (L1) — нативно на Go, без Python-зависимости.
+- Язык — Go (ради единого набора RRA), формулы L1 нативно; при недостаточной
+  точности L1 — Python-сайдкар `ReadabilityRunner`. См. `docs/adr/0001-go-vs-python.md`.
 - L6 = универсальный дрейф (L6a, без ИИ) + опциональный семантический тир L6c.
   Дисциплина-сверка (бывший L6b) сюда НЕ входит — она в гейте `rra-docs`.
 - I/O изолирован в `RepoStore` / `LinterRunner` / `LLMClient` / `ReportSink`.
