@@ -35,6 +35,8 @@ CLI-роутер, CI. Ветка `chore/scaffold`. Подробности — `P
 - L6 = универсальный дрейф (L6a, без ИИ) + опциональный семантический тир L6c.
   Дисциплина-сверка (бывший L6b) сюда НЕ входит — она в гейте `rra-docs`.
 - I/O изолирован в `RepoStore` / `LinterRunner` / `LLMClient` / `ReportSink`.
+- LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
+  эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001.
 
 ## Открытые вопросы
 
