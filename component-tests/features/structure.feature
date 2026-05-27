@@ -1,4 +1,3 @@
-@wip
 Feature: structure — L3 структурная полнота
 
   Scenario: опрятный репозиторий проходит

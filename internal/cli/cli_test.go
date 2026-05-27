@@ -55,8 +55,10 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
-func TestKnownSubcommandNotImplemented(t *testing.T) {
-	for _, c := range subcommands {
+// TestTodoSubcommandsNotImplemented проверяет, что нереализованные подкоманды
+// (S2–S7) сообщают «ещё не реализована» и возвращают код 2.
+func TestTodoSubcommandsNotImplemented(t *testing.T) {
+	for _, c := range subcommandsTodo {
 		code, _, stderr := run(t, c)
 		if code != 2 {
 			t.Errorf("%s: код %d, ожидали 2", c, code)
