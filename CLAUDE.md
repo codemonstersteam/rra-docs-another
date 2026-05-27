@@ -16,7 +16,7 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Концепция (`CONCEPT.md`) | done |
 | План (`PLAN.md`, `backlog.md`) | done |
 | intent (`docs/intent.md`) | done |
-| Каркас (E0) | in review (ветка `chore/scaffold`) |
+| Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | todo |
 | Проектный пакет (E2) | todo |
 | Реализация слайсов S1–S7 (E3–E9) | todo |
