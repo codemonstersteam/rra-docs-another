@@ -19,15 +19,19 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
 | Проектный пакет (E2) | done (дизайн-PR влит = аппрув) |
-| Реализация слайсов S1–S7 (E3–E9) | todo |
+| Реализация слайсов S1–S7 (E3–E9) | in progress (S1 `structure` в main) |
 
 ## Следующий шаг
 
-Приёмка E2: мерж дизайн-PR (ветка `design/assess`) = аппрув = разрешение sonnet.
-После мержа — реализация по тикетам `docs/design/assess/backlog.md`, восходящий
-порядок: **S1 `structure`** (ставит RepoStore + ReportSink + egress), затем
-S2–S6, затем S7 `assess`. Каждый слайс снимает `@wip` со своего `.feature`.
-S8 (`drift --semantic`) — поздний, детализируется отдельно.
+**S2 `readability`** (L1) — реализация Sonnet'ом по `docs/design/assess/slices/02-readability.md`,
+ветка `feat/slice-readability`. Голова и иерархию утверждать с оператором ДО кода
+(он принимает в IDE). Снять `@wip` с `readability.feature`.
+
+Конвенция слайса (как в `ubik/passkey-demo-api`, см. `infrastructure.md`):
+самодостаточный пакет `internal/slice/<name>/` — `head.go` (`Process<Slice>` —
+голова), `adapter.go` (парсинг), `logic.go`, `register.go` (`Deps`+`NewDeps`).
+Общие `internal/{domain,io,cli}` (egress в `cli`). Образец — S1 в main.
+Дальше S3→S6, затем S7 `assess`. S8 (`drift --semantic`) — поздний.
 
 ## Принятые решения
 
