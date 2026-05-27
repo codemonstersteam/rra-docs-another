@@ -1,0 +1,50 @@
+# Компонентные тесты rra-docs-another. Запуск: ./scripts/run-tests.sh
+#
+# Два сервиса:
+#   - llm-stub: единственный долгоживущий сервис — OpenAI-совместимая заглушка
+#     LLM, к которой тул ходит по сети по имени сервиса (изоляция: реальный
+#     протокол, детерминированные ответы, без выхода в интернет).
+#   - tester:   контейнер с собранным бинарём-SUT + godog; гоняет go test,
+#     каждый шаг exec-ает бинарь. SUT — CLI, поэтому отдельного долгоживущего
+#     сервиса-SUT нет (в отличие от HTTP-сервиса).
+
+name: rra-docs-another-component-tests
+
+services:
+
+  llm-stub:
+    build:
+      context: ..
+      dockerfile: component-tests/compose/llm-stub.Dockerfile
+    environment:
+      STUB_ADDR: ":8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 1s
+      timeout: 2s
+      retries: 15
+    expose:
+      - "8080"
+    networks:
+      - test-net
+
+  tester:
+    build:
+      context: ..
+      dockerfile: component-tests/Dockerfile.runtime
+    environment:
+      RRA_BIN: /usr/local/bin/rra-docs-another
+      LLM_STUB_BASE_URL: http://llm-stub:8080/v1
+      LLM_STUB_CONTROL_URL: http://llm-stub:8080/control
+      # По умолчанию пропускаем @wip (подкоманды до их реализации в S1–S7),
+      # чтобы main был зелёным. GODOG_TAGS='~@never' прогонит всё (будет красным).
+      GODOG_TAGS: ${GODOG_TAGS:-~@wip}
+    depends_on:
+      llm-stub:
+        condition: service_healthy
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge

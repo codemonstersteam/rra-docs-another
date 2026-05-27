@@ -1,0 +1,30 @@
+# Контейнер-раннер компонентных тестов rra-docs-another.
+#
+# Собирает бинарь-SUT из корневого модуля, затем гоняет godog внутри контейнера
+# (go test ./steps/...). Шаги exec-ают этот бинарь; до LLM-стаба ходят по сети по
+# имени сервиса. Запускается ТОЛЬКО через docker compose (scripts/run-tests.sh),
+# не с хоста — требование изоляции (см. README).
+#
+# Контекст сборки — корень репозитория (см. docker-compose.test.yml).
+# TODO(S4 style): добавить Vale и markdownlint-cli2 в образ, когда оживёт L2.
+
+FROM golang:1.26-alpine AS bin
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY cmd ./cmd
+COPY internal ./internal
+RUN CGO_ENABLED=0 go build -o /rra-docs-another ./cmd/rra-docs-another
+
+FROM golang:1.26-alpine
+RUN apk add --no-cache bash
+WORKDIR /tests
+# Сначала только go.mod/go.sum — кеш слоя зависимостей.
+COPY component-tests/go.mod component-tests/go.sum ./
+RUN go mod download
+COPY component-tests/steps ./steps
+COPY component-tests/features ./features
+COPY component-tests/testdata ./testdata
+COPY --from=bin /rra-docs-another /usr/local/bin/rra-docs-another
+ENV RRA_BIN=/usr/local/bin/rra-docs-another
+ENTRYPOINT ["go", "test", "-v", "-count=1", "./steps/..."]
