@@ -9,10 +9,10 @@ import (
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 )
 
-// parseStructureArgs — ингресс-адаптер: только парсинг флагов и позиционного аргумента.
-// args — os.Args[2:] (после имени подкоманды "structure").
+// ParseArgs — ингресс-адаптер слайса structure: только парсинг флагов и
+// позиционного аргумента. args — os.Args[2:] (после имени подкоманды "structure").
 // Поддерживает позиционный аргумент как до, так и после флагов.
-func parseStructureArgs(args []string, stderr io.Writer) (domain.Request, error) {
+func ParseArgs(args []string, stderr io.Writer) (domain.Request, error) {
 	fs := flag.NewFlagSet("structure", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 

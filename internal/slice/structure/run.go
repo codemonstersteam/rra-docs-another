@@ -10,9 +10,10 @@ type Deps struct {
 	Store iodep.RepoStore
 }
 
-// runStructure — голова-труба слайса S1.
-// Порядок: NewAuditTarget → NewConfig → store.ReadStructure → checkStructure → buildReport.
-func runStructure(req domain.Request, deps Deps) (domain.Report, error) {
+// Run — голова-труба слайса S1 (structure): экспортируемая точка входа слайса,
+// вызывается из internal/cli. Порядок:
+// NewAuditTarget → NewConfig → store.ReadStructure → checkStructure → buildReport.
+func Run(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
 		return domain.Report{}, err
