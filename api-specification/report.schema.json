@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/codemonstersteam/rra-docs-another/api-specification/report.schema.json",
+  "title": "rra-docs-another report",
+  "description": "Единый машинный отчёт аудита документации. Послойные подкоманды (structure/readability/jtbd/style/drift) заполняют секцию layers; jtbd/fitness/assess заполняют секцию jtbd (четыре потребителя). Поле command фиксирует подкоманду-источник.",
+  "type": "object",
+  "required": ["schema_version", "tool", "command", "target"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Версия схемы отчёта."
+    },
+    "tool": {
+      "type": "string",
+      "const": "rra-docs-another"
+    },
+    "command": {
+      "type": "string",
+      "enum": ["structure", "readability", "jtbd", "style", "fitness", "drift", "assess"],
+      "description": "Подкоманда, породившая отчёт."
+    },
+    "target": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Путь к корню аудируемого репозитория."
+        },
+        "commit": {
+          "type": ["string", "null"],
+          "description": "HEAD-коммит, если репозиторий git; иначе null."
+        }
+      }
+    },
+    "layers": {
+      "type": "object",
+      "description": "Результаты слоёв. Присутствующие ключи зависят от подкоманды.",
+      "additionalProperties": false,
+      "properties": {
+        "L1": { "$ref": "#/$defs/layerResult" },
+        "L2": { "$ref": "#/$defs/layerResult" },
+        "L3": { "$ref": "#/$defs/layerResult" },
+        "L4": { "$ref": "#/$defs/layerResult" },
+        "L5": { "$ref": "#/$defs/layerResult" },
+        "L6": { "$ref": "#/$defs/layerResult" }
+      }
+    },
+    "jtbd": {
+      "type": "object",
+      "description": "Четыре независимых результата по потребителям. Присутствует для jtbd/fitness/assess. НЕ усредняется в одно число.",
+      "additionalProperties": false,
+      "properties": {
+        "maintainer": { "$ref": "#/$defs/jtbdResult", "description": "Инженер-создатель: сдать репозиторий преемнику без личного брифинга." },
+        "consumer": { "$ref": "#/$defs/jtbdResult", "description": "Инженер-потребитель: за 3 минуты оценить пригодность сервиса." },
+        "manager": { "$ref": "#/$defs/jtbdResult", "description": "Менеджер: за 3 минуты понять структуру системы." },
+        "agent": { "$ref": "#/$defs/jtbdResult", "description": "ИИ-агент: загрузить контекст под задачу в ограниченном бюджете." }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "description": "Конкретные нарушения с привязкой к файлу/строке.",
+      "items": { "$ref": "#/$defs/violation" }
+    },
+    "errors": {
+      "type": "array",
+      "description": "Ошибки запуска (код возврата 2). Непустой массив означает, что оценка не выполнена.",
+      "items": { "$ref": "#/$defs/error" }
+    }
+  },
+  "$defs": {
+    "layerId": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3", "L4", "L5", "L6"]
+    },
+    "score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Числовой score 0–100; null, если слой не даёт числовой оценки."
+    },
+    "layerResult": {
+      "type": "object",
+      "required": ["name", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Человекочитаемое имя слоя (readability/style/structure/…)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "warn", "skipped"],
+          "description": "pass — чисто; fail — есть блокирующее нарушение; warn — есть непороговые замечания (например L1); skipped — слой не исполнялся (short-circuit или --up-to)."
+        },
+        "score": { "$ref": "#/$defs/score" },
+        "summary": {
+          "type": "string",
+          "description": "Одна фраза с итогом слоя."
+        }
+      }
+    },
+    "jtbdResult": {
+      "type": "object",
+      "required": ["status", "score", "gaps"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "PARTIAL"],
+          "description": "Бинарный исход job с промежуточным PARTIAL."
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Числовой score потребителя 0–100."
+        },
+        "gaps": {
+          "type": "array",
+          "description": "Конкретные пробелы, мешающие закрыть job; пустой массив при PASS.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "violation": {
+      "type": "object",
+      "required": ["code", "layer", "severity", "file", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Машинный код нарушения (например broken_link, missing_readme, line_too_long)."
+        },
+        "layer": { "$ref": "#/$defs/layerId" },
+        "severity": {
+          "type": "string",
+          "enum": ["blocker", "warning"],
+          "description": "blocker даёт код возврата 1 (кроме L1); warning — нет."
+        },
+        "file": {
+          "type": "string",
+          "description": "Путь к файлу относительно корня репозитория."
+        },
+        "line": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Номер строки (1-based) или null, если неприменимо."
+        },
+        "message": {
+          "type": "string",
+          "description": "Человекочитаемое описание нарушения."
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "path_not_found",
+            "read_error",
+            "config_invalid",
+            "tool_missing",
+            "tool_failed",
+            "llm_rate_limited",
+            "llm_unavailable",
+            "llm_budget_exceeded"
+          ],
+          "description": "Код режима отказа. Полная карта — README «Карта режимов отказа»."
+        },
+        "integration": {
+          "type": ["string", "null"],
+          "enum": ["RepoStore", "LinterRunner", "LLMClient", "ReportSink", null],
+          "description": "I/O-объект, на котором произошёл отказ; null для ошибок конфигурации."
+        },
+        "message": {
+          "type": "string",
+          "description": "Диагностическое сообщение."
+        }
+      }
+    }
+  }
+}
