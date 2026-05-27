@@ -17,15 +17,17 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | План (`PLAN.md`, `backlog.md`) | done |
 | intent (`docs/intent.md`) | done |
 | Каркас (E0) | done |
-| Контракт + Gherkin (E1, гейт) | in progress (PR1 контракт ✓; PR2 godog — in review) |
+| Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
 | Проектный пакет (E2) | todo |
 | Реализация слайсов S1–S7 (E3–E9) | todo |
 
 ## Следующий шаг
 
-E1 — контракт + Gherkin (жёсткий гейт): `api-specification/cli.md`,
-`report.schema.json`, README «Карта режимов отказа», godog-раннер + фикстуры
-`repo-good`/`repo-bad`. Ветка `feat/contract`. Подробности — `PLAN.md` фазы 2–3.
+E2 — проектный пакет `docs/design/assess/` (opus, `program-design` Шаги 1–12):
+`slices.md`, `messages.md`, карточки слайсов с псевдокодом пайпа + контрактами +
+`## Gherkin-mapping`, `infrastructure.md`, `contracts-graph.md`, `backlog.md` с
+хендофф-чеклистом. Гейт открыт (контракт + Gherkin в main). Сверка дизайна —
+против `@wip`-сценариев из `component-tests/features/`.
 
 ## Принятые решения
 
