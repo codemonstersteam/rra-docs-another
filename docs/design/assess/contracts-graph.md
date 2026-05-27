@@ -31,7 +31,7 @@ parseStructureArgs --Request--> runStructure
   | NewAuditTarget -> AuditTarget ; NewConfig -> Config
   | store.ReadMarkdownDocs(AuditTarget) -> []MarkdownDoc        [I/O]
   | scoreReadability([]MarkdownDoc)[Config] -> LayerOutcome
-  |   ← fleschKincaid(MarkdownDoc), obornevaRus(MarkdownDoc)
+  |   ← pickFormula(MarkdownDoc) ← fleschKincaid(MarkdownDoc), obornevaRus(MarkdownDoc)
   | buildReport -> Report
 ```
 ### S3 jtbd

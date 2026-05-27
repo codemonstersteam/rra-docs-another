@@ -41,8 +41,10 @@
 ### TICKET S2 — slice readability: CLI `readability <path>`
 - Спека: `slices/02-readability.md`. Зависимости: S1 (RepoStore, egress в main).
 - Ветка `feat/slice-readability`.
-- DoD: `fleschKincaid`/`obornevaRus`/`scoreReadability`; L1 даёт только warning
-  (никогда код 1); `@wip` снят со `readability.feature`; зелёные.
+- DoD: `fleschKincaid`/`obornevaRus`/`pickFormula`/`scoreReadability`; L1 даёт
+  только warning (никогда код 1); `buildReport`/`layerKey` копируются в
+  `readability/head.go` (консолидация — на S7); `domain.Config` дополнен порогом
+  читаемости; `@wip` снят со `readability.feature`; зелёные.
 
 ### TICKET S3 — slice jtbd: CLI `jtbd <path>`
 - Спека: `slices/03-jtbd.md`. Зависимости: S1.

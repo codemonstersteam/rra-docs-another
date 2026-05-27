@@ -16,11 +16,23 @@ runReadability(req) [Deps: RepoStore] -> (Report, error)
    | NewConfig(req)                   -> Config              # пороги читаемости
    | store.ReadMarkdownDocs(target)   -> []MarkdownDoc       # I/O
    | scoreReadability(docs)           -> LayerOutcome        # [dep: Config]
+       | pickFormula(doc)             -> fleschKincaid | obornevaRus
    | buildReport({Layers:[outcome]})  -> Report
 ```
 
 `scoreReadability` опирается на чистые формулы-листья: `fleschKincaid` (англ.),
 `obornevaRus` (рус., `FRE = 206.836 − 1.52·ASL − 65.14·ASW`, слоги ≈ гласные).
+`pickFormula` выбирает формулу по доле кириллицы в тексте дока.
+
+## Принятые решения (S2)
+
+- **`buildReport`/`layerKey` — копируются** в `readability/head.go` дословно из S1
+  (слайс самодостаточен; консолидация generic-сборки отчёта откладывается на S7
+  `assess`). Утверждено оператором, 2026-05-27.
+- **`domain.Config` дополняется** порогом читаемости: `ReadabilityMin() int`,
+  дефолт `50` (по шкале FRE) в `NewConfig`.
+- **`pickFormula(doc)`** — эвристика по языку: доля кириллицы ≥ 30% → `obornevaRus`,
+  иначе `fleschKincaid`.
 
 ## Псевдокод пайпа
 
@@ -41,9 +53,15 @@ runReadability(req) -> Result<Report, Error>:
 - **Антецедент:** —. **Консеквент:** оценка читаемости; для пустого текста —
   нейтральное значение (без паники, без деления на ноль).
 
+### pickFormula
+- **Сигнатура:** `pickFormula(doc MarkdownDoc) -> func(MarkdownDoc) float64`
+- **Input (data):** MarkdownDoc. **Dependencies:** —
+- **Антецедент:** —. **Консеквент:** `obornevaRus` при доле кириллицы ≥ 30%,
+  иначе `fleschKincaid`; для пустого текста — `fleschKincaid` (без паники).
+
 ### scoreReadability
-- **Сигнатура:** `scoreReadability(docs []MarkdownDoc) -> LayerOutcome`
-- **Input (data):** []MarkdownDoc. **Dependencies:** `Config` (пороги).
+- **Сигнатура:** `scoreReadability(docs []MarkdownDoc, cfg Config) -> LayerOutcome`
+- **Input (data):** []MarkdownDoc. **Dependencies:** `Config` (порог `ReadabilityMin`).
 - **Что делает:** усредняет по докам, сравнивает с порогом, формирует L1-исход.
 - **Консеквент:** `Status ∈ {pass, warn}` (никогда fail); `Violations` —
   только `warning` с `file:line` на сложных абзацах; `Score` 0–100.
@@ -56,6 +74,7 @@ runReadability(req) -> Result<Report, Error>:
 |---|---|---|---|
 | fleschKincaid | 1 | пустой текст | 2 |
 | obornevaRus | 1 | пустой текст | 2 |
+| pickFormula | 1 | кириллица ≥30% → rus; пустой → en | 3 |
 | scoreReadability | 1 | низкая читаемость → warn (не fail) | 2 |
 
 `NewAuditTarget`/`NewConfig` юнит-тесты учтены в S1 (один пакет `internal/domain`).
