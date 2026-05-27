@@ -150,39 +150,41 @@ func checkDocDrift(structure domain.RepoStructure, cfg domain.Config) []domain.V
 // Status=fail при наличии blocker; warn если только warning; иначе pass.
 // Score — доля пройденных проверок (0–100).
 func checkStructure(structure domain.RepoStructure, cfg domain.Config) domain.LayerOutcome {
-	var all []domain.Violation
-	all = append(all, checkReadmePresent(structure)...)
-	all = append(all, checkLinksResolve(structure)...)
-	all = append(all, checkDocDrift(structure, cfg)...)
+	readme := checkReadmePresent(structure)
+	links := checkLinksResolve(structure)
+	drift := checkDocDrift(structure, cfg)
 
-	// Три отдельных чека; считаем сколько пройдено.
-	total := 3
+	all := make([]domain.Violation, 0, len(readme)+len(links)+len(drift))
+	all = append(all, readme...)
+	all = append(all, links...)
+	all = append(all, drift...)
+
+	// Score — доля пройденных из трёх проверок. README и ссылки могут дать blocker;
+	// drift — только warning, в знаменателе считается всегда пройденной.
+	const total = 3
 	failed := 0
-	if hasBlocker(checkReadmePresent(structure)) {
+	if hasBlocker(readme) {
 		failed++
 	}
-	if hasBlocker(checkLinksResolve(structure)) {
+	if hasBlocker(links) {
 		failed++
 	}
-	// drift — warning, не влияет на score как на "пройденный/непройденный" blocker.
-
-	passed := total - failed
-	score := (passed * 100) / total
+	score := (total - failed) * 100 / total
 
 	status := "pass"
-	if hasAnyBlocker(all) {
+	switch {
+	case hasBlocker(all):
 		status = "fail"
-	} else if len(all) > 0 {
+	case len(all) > 0:
 		status = "warn"
 	}
 
-	summary := buildSummary(status, all)
 	return domain.LayerOutcome{
 		Result: domain.LayerResult{
 			Name:    "structure",
 			Status:  status,
 			Score:   &score,
-			Summary: summary,
+			Summary: buildSummary(status, all),
 		},
 		Violations: all,
 	}
@@ -195,10 +197,6 @@ func hasBlocker(vs []domain.Violation) bool {
 		}
 	}
 	return false
-}
-
-func hasAnyBlocker(vs []domain.Violation) bool {
-	return hasBlocker(vs)
 }
 
 func buildSummary(status string, vs []domain.Violation) string {
