@@ -16,15 +16,16 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Концепция (`CONCEPT.md`) | done |
 | План (`PLAN.md`, `backlog.md`) | done |
 | intent (`docs/intent.md`) | done |
-| Каркас (E0) | todo |
+| Каркас (E0) | in review (ветка `chore/scaffold`) |
 | Контракт + Gherkin (E1, гейт) | todo |
 | Проектный пакет (E2) | todo |
 | Реализация слайсов S1–S7 (E3–E9) | todo |
 
 ## Следующий шаг
 
-E0 — каркас: `go mod init github.com/codemonstersteam/rra-docs-another`,
-CLI-роутер, CI. Ветка `chore/scaffold`. Подробности — `PLAN.md` фаза 0.
+E1 — контракт + Gherkin (жёсткий гейт): `api-specification/cli.md`,
+`report.schema.json`, README «Карта режимов отказа», godog-раннер + фикстуры
+`repo-good`/`repo-bad`. Ветка `feat/contract`. Подробности — `PLAN.md` фазы 2–3.
 
 ## Принятые решения
 
@@ -37,11 +38,11 @@ CLI-роутер, CI. Ветка `chore/scaffold`. Подробности — `P
 - I/O изолирован в `RepoStore` / `LinterRunner` / `LLMClient` / `ReportSink`.
 - LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
   эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001.
+- CLI — stdlib (subcommand-switch в `internal/cli`), без cobra.
 
 ## Открытые вопросы
 
 - Имя бинаря (`rra-docs-another` длинновато — возможно укоротить).
-- CLI-фреймворк: stdlib `flag` vs cobra (склоняемся к stdlib).
 
 ## Фрейм работы с агентом
 
