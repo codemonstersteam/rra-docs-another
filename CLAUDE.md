@@ -18,7 +18,7 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | intent (`docs/intent.md`) | done |
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
-| Проектный пакет (E2) | in review (ветка `design/assess`) |
+| Проектный пакет (E2) | done (дизайн-PR влит = аппрув) |
 | Реализация слайсов S1–S7 (E3–E9) | todo |
 
 ## Следующий шаг
