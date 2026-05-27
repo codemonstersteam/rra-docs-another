@@ -1,4 +1,3 @@
-@wip
 Feature: readability — L1 читаемость
 
   Scenario: опрятный репозиторий

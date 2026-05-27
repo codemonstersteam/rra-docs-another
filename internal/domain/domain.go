@@ -97,17 +97,22 @@ func headCommit(root string) string {
 // Config — валидированный проектный конфиг (неэкспортируемые поля).
 type Config struct {
 	driftThresholdDays int
+	readabilityMin     int
 }
 
 // DriftThresholdDays — порог устаревания документации в днях.
 func (c Config) DriftThresholdDays() int { return c.driftThresholdDays }
+
+// ReadabilityMin — минимальный допустимый балл читаемости (Flesch Reading Ease, 0–100).
+// Значения ниже порога — предупреждение (warning), не блокер.
+func (c Config) ReadabilityMin() int { return c.readabilityMin }
 
 // NewConfig валидирует и создаёт Config.
 // Если ConfigPath пуст — берутся встроенные дефолты.
 // Failure: ErrConfigInvalid.
 func NewConfig(req Request) (Config, error) {
 	if req.ConfigPath == "" {
-		return Config{driftThresholdDays: 90}, nil
+		return Config{driftThresholdDays: 90, readabilityMin: 50}, nil
 	}
 	cfg, err := parseConfigFile(req.ConfigPath)
 	if err != nil {
@@ -122,8 +127,8 @@ func parseConfigFile(path string) (Config, error) {
 	if _, err := os.Stat(path); err != nil {
 		return Config{}, fmt.Errorf("файл не найден: %s", path)
 	}
-	// TODO(S2+): парсинг YAML/TOML схемы конфига.
-	return Config{driftThresholdDays: 90}, nil
+	// TODO(S3+): парсинг YAML/TOML схемы конфига.
+	return Config{driftThresholdDays: 90, readabilityMin: 50}, nil
 }
 
 // ── Данные (I/O-выход и промежуточные) ──────────────────────────────────────
