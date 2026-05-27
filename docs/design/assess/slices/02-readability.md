@@ -1,0 +1,73 @@
+# S2 — readability (L1 читаемость)
+
+Вход: `CLI rra-docs-another readability <path>`. Новых интеграций нет (только
+`RepoStore` из S1). Чистая логика над `[]MarkdownDoc`.
+
+**Особое правило L1:** порог-warning, не блок (CONCEPT §L1). Нарушения L1 всегда
+`severity=warning`; статус слоя ∈ `{pass, warn}`. Команда `readability`
+**никогда** не даёт код возврата 1.
+
+## Дерево модулей
+
+```
+parseReadabilityArgs(args)            -> Request
+runReadability(req) [Deps: RepoStore] -> (Report, error)
+   | NewAuditTarget(req)              -> AuditTarget
+   | NewConfig(req)                   -> Config              # пороги читаемости
+   | store.ReadMarkdownDocs(target)   -> []MarkdownDoc       # I/O
+   | scoreReadability(docs)           -> LayerOutcome        # [dep: Config]
+   | buildReport({Layers:[outcome]})  -> Report
+```
+
+`scoreReadability` опирается на чистые формулы-листья: `fleschKincaid` (англ.),
+`obornevaRus` (рус., `FRE = 206.836 − 1.52·ASL − 65.14·ASW`, слоги ≈ гласные).
+
+## Псевдокод пайпа
+
+```
+runReadability(req) -> Result<Report, Error>:
+    | NewAuditTarget(req)            -> AuditTarget
+    | NewConfig(req)                 -> Config
+    | store.ReadMarkdownDocs(target) -> []MarkdownDoc
+    | scoreReadability(docs)         -> LayerOutcome      # [dep: Config]
+    | buildReport({Layers:[outcome]}) -> Report
+```
+
+## Контракты модулей
+
+### fleschKincaid / obornevaRus
+- **Сигнатура:** `(doc MarkdownDoc) -> float64`
+- **Input (data):** MarkdownDoc. **Dependencies:** —
+- **Антецедент:** —. **Консеквент:** оценка читаемости; для пустого текста —
+  нейтральное значение (без паники, без деления на ноль).
+
+### scoreReadability
+- **Сигнатура:** `scoreReadability(docs []MarkdownDoc) -> LayerOutcome`
+- **Input (data):** []MarkdownDoc. **Dependencies:** `Config` (пороги).
+- **Что делает:** усредняет по докам, сравнивает с порогом, формирует L1-исход.
+- **Консеквент:** `Status ∈ {pass, warn}` (никогда fail); `Violations` —
+  только `warning` с `file:line` на сложных абзацах; `Score` 0–100.
+
+(`NewAuditTarget`, `NewConfig`, `buildReport`, `store.ReadMarkdownDocs` — см. S1.)
+
+## Юнит-тесты
+
+| Модуль | Happy | Ветки | Итого |
+|---|---|---|---|
+| fleschKincaid | 1 | пустой текст | 2 |
+| obornevaRus | 1 | пустой текст | 2 |
+| scoreReadability | 1 | низкая читаемость → warn (не fail) | 2 |
+
+`NewAuditTarget`/`NewConfig` юнит-тесты учтены в S1 (один пакет `internal/domain`).
+
+## Gherkin-mapping (`features/readability.feature`)
+
+| Сценарий | Then-шаг | Кто обеспечивает |
+|---|---|---|
+| опрятный репозиторий | код возврата 0 | egress `exitCode` |
+| опрятный репозиторий | `layers.L1.status` присутствует | `scoreReadability` → `buildReport` |
+| низкая читаемость не блокирует | код возврата 0 | `scoreReadability` (warn, не blocker) + `exitCode` (L1-исключение) |
+| путь не существует | код возврата 2 | egress ← `NewAuditTarget` (`ErrPathNotFound`) |
+| путь не существует | `errors[]` `path_not_found` | `buildErrorReport` |
+
+[x] Gherkin-mapping сверен

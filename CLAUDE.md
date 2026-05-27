@@ -18,16 +18,16 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | intent (`docs/intent.md`) | done |
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
-| Проектный пакет (E2) | todo |
+| Проектный пакет (E2) | in review (ветка `design/assess`) |
 | Реализация слайсов S1–S7 (E3–E9) | todo |
 
 ## Следующий шаг
 
-E2 — проектный пакет `docs/design/assess/` (opus, `program-design` Шаги 1–12):
-`slices.md`, `messages.md`, карточки слайсов с псевдокодом пайпа + контрактами +
-`## Gherkin-mapping`, `infrastructure.md`, `contracts-graph.md`, `backlog.md` с
-хендофф-чеклистом. Гейт открыт (контракт + Gherkin в main). Сверка дизайна —
-против `@wip`-сценариев из `component-tests/features/`.
+Приёмка E2: мерж дизайн-PR (ветка `design/assess`) = аппрув = разрешение sonnet.
+После мержа — реализация по тикетам `docs/design/assess/backlog.md`, восходящий
+порядок: **S1 `structure`** (ставит RepoStore + ReportSink + egress), затем
+S2–S6, затем S7 `assess`. Каждый слайс снимает `@wip` со своего `.feature`.
+S8 (`drift --semantic`) — поздний, детализируется отдельно.
 
 ## Принятые решения
 
