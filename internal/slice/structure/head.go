@@ -1,19 +1,11 @@
 package structure
 
-import (
-	"github.com/codemonstersteam/rra-docs-another/internal/domain"
-	iodep "github.com/codemonstersteam/rra-docs-another/internal/io"
-)
+import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
-// Deps — зависимости слайса structure (I/O-объекты).
-type Deps struct {
-	Store iodep.RepoStore
-}
-
-// Run — голова-труба слайса S1 (structure): экспортируемая точка входа слайса,
-// вызывается из internal/cli. Порядок:
+// ProcessStructure — голова-труба слайса S1 (structure): головной модуль (head.go),
+// вызывается из register.go. Порядок:
 // NewAuditTarget → NewConfig → store.ReadStructure → checkStructure → buildReport.
-func Run(req domain.Request, deps Deps) (domain.Report, error) {
+func ProcessStructure(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
 		return domain.Report{}, err

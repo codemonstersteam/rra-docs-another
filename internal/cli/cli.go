@@ -56,10 +56,10 @@ func runStructureCmd(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	deps := structure.Deps{Store: iodep.NewRepoStore()}
+	deps := structure.NewDeps()
 	sink := iodep.NewReportSink()
 
-	report, runErr := structure.Run(req, deps)
+	report, runErr := structure.ProcessStructure(req, deps)
 	return egress(report, runErr, req, sink, stdout)
 }
 
