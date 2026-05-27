@@ -39,6 +39,10 @@ E1 — контракт + Gherkin (жёсткий гейт): `api-specification/
 - LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
   эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001.
 - CLI — stdlib (subcommand-switch в `internal/cli`), без cobra.
+- Компонентные тесты — всегда в Docker Compose (объект = спецификация программы:
+  сервис или CLI-тул). Для тула: бинарь = сервис compose против фикстур, внешний
+  API (LLM) = заглушка-сервис в том же compose. httptest/in-process и «бинарь на
+  хосте» не используем; развилку не пересматриваем. См. `skills/component-tests`.
 
 ## Открытые вопросы
 
