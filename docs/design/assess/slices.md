@@ -28,20 +28,22 @@
 
 ## Общая форма slice'а (CLI)
 
-Все слайсы делят одну форму:
+Слайс — самодостаточный пакет `internal/slice/<name>/` со строгим набором файлов
+(`head.go`/`adapter.go`/`logic.go`/`domain.go`/`errors.go`/`register.go` — см.
+`infrastructure.md`, конвенция как в `ubik/passkey-demo-api`). Голова — в `head.go`:
 
 ```
-parse<Slice>Args(args)         -> Request          # ингресс-адаптер: только парсинг
-run<Slice>(req) [deps]         -> (Report, error)  # головной модуль (пайп)
-   | NewAuditTarget(req)       -> AuditTarget       # конструктор: валидация пути
-   | NewConfig(req)            -> Config            # конструктор: валидация --config
-   | store.Read…(target)       -> данные             # I/O: RepoStore
+ParseArgs(args)                -> Request           # adapter.go: только парсинг
+Process<Slice>(req, Deps)      -> (Report, error)   # head.go: головной модуль (пайп)
+   | NewAuditTarget(req)       -> AuditTarget        # audit: валидация пути
+   | NewConfig(req)            -> Config            # audit: валидация --config
+   | deps.Store.Read…(target)  -> данные             # io: RepoStore
    | <чистые логика-листья>    -> LayerOutcome / []JTBDResult
-   | buildReport(…)            -> Report            # чистая логика
+   | buildReport(…)            -> Report            # report
 ```
 
-Запись отчёта (`ReportSink.Write`) и вычисление кода возврата вынесены в **общий
-egress** (`internal/cli`, см. `infrastructure.md`), а не в голову каждого слайса:
-он одинаково форматирует и успех (код 0/1), и отказ (`errors[]` + код 2). Это
-осознанное уточнение CLI-эгресса относительно эскиза S2 в скилле — единая точка
-маппинга «результат → формат ответа».
+Запись отчёта и код возврата — **общий egress** в `internal/report` (`Egress`),
+не в голове: единая точка «результат → формат ответа» и для успеха (0/1), и для
+отказа (`errors[]` + 2). Это осознанное отличие от per-endpoint mapError
+HTTP-эталона — у тула отчёт машинно-единый (одна схема, один набор `error.code`).
+Слайс подключает свою подкоманду сам через `register.go`.
