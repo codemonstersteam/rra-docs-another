@@ -1,4 +1,3 @@
-@wip
 Feature: jtbd — L4 JTBD-присутствие
 
   Scenario: опрятный репозиторий — все четыре JTBD PASS

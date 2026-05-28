@@ -6,52 +6,69 @@
 ## Дерево модулей
 
 ```
-parseJtbdArgs(args)                   -> Request
-runJtbd(req) [Deps: RepoStore]        -> (Report, error)
-   | NewAuditTarget(req)              -> AuditTarget
-   | NewConfig(req)                   -> Config              # словари заголовков (ru+en)
-   | store.ReadMarkdownDocs(target)   -> []MarkdownDoc
-   | matchHeadings(docs)              -> HeadingIndex        # [dep: Config]
-   | buildJTBDCard(index)             -> JTBDResult ×4       # [dep: consumerSpec]
-   | buildReport({JTBD: results})     -> Report
+ParseArgs(args)                                -> Request
+ProcessJTBD(req) [Deps: RepoStore]             -> (Report, error)
+   | NewAuditTarget(req)                       -> AuditTarget
+   | NewConfig(req)                            -> Config
+   | store.ReadMarkdownDocs(target)            -> []MarkdownDoc
+   | matchHeadings(docs, cfg)                  -> HeadingIndex
+   | buildJTBDCard(index, spec) ×4             -> map[role]JTBDResult
+   | buildReport(target, cmd, jtbdByRole)      -> Report
 ```
 
-`buildJTBDCard` вызывается четырежды с разным `consumerSpec` (value-config):
+`buildJTBDCard` вызывается четырежды с разными `consumerSpec` (value-config):
 `maintainer`, `consumer`, `manager`, `agent`. Четыре независимых результата — не
-усредняются.
+усредняются. Результаты собираются в `map[string]JTBDResult` с ключом-ролью.
 
 ## Псевдокод пайпа
 
 ```
-runJtbd(req) -> Result<Report, Error>:
-    | NewAuditTarget(req)            -> AuditTarget
-    | NewConfig(req)                 -> Config
-    | store.ReadMarkdownDocs(target) -> []MarkdownDoc
-    | matchHeadings(docs)            -> HeadingIndex          # [dep: Config]
-    | buildJTBDCard(index)           -> JTBDResult  # maintainer  [dep: spec]
-    | buildJTBDCard(index)           -> JTBDResult  # consumer
-    | buildJTBDCard(index)           -> JTBDResult  # manager
-    | buildJTBDCard(index)           -> JTBDResult  # agent
-    | buildReport({JTBD:[…4]})       -> Report
+ProcessJTBD(req) -> Result<Report, Error>:
+    | NewAuditTarget(req)            -> AuditTarget              # path_not_found / read_error
+    | NewConfig(req)                 -> Config                   # config_invalid
+    | store.ReadMarkdownDocs(target) -> []MarkdownDoc            # read_error
+    | matchHeadings(docs, cfg)       -> HeadingIndex
+    | jtbdByRole := {
+    |     "maintainer": buildJTBDCard(index, specMaintainer),
+    |     "consumer":   buildJTBDCard(index, specConsumer),
+    |     "manager":    buildJTBDCard(index, specManager),
+    |     "agent":      buildJTBDCard(index, specAgent),
+    |   }
+    | buildReport(target, "jtbd", jtbdByRole) -> Report          # Report.JTBD = jtbdByRole
 ```
 
 Четыре вызова `buildJTBDCard` — не цикл, а фиксированная развёртка по четырём
 потребителям (детерминированно, читается за взгляд).
 
+## Плюминг JTBD-карты — фиксировано (вариант b)
+
+Локальный `buildReport` слайса принимает `jtbdByRole map[string]domain.JTBDResult`
+**отдельным параметром**. `domain.ReportParts.JTBD` **не меняем** — пусть остаётся
+`[]JTBDResult` для совместимости с S1/S2 (они это поле не трогают). Слайс
+самодостаточен: своя сборка отчёта, без общего контейнера на четыре роли. Когда
+S5/S7 повторят паттерн — каждый сделает свой `buildReport`, дубль по соглашению.
+
+`layers.L4` подкомандой `jtbd` **не заполняется** — её соберёт S7 `assess` (там
+послойная картина L1–L6 нужна для рендера). Здесь только `Report.JTBD = …` и
+`target`/`command`/`schema_version`/`tool`.
+
 ## Контракты модулей
 
 ### matchHeadings
-- **Сигнатура:** `matchHeadings(docs []MarkdownDoc) -> HeadingIndex`
-- **Input (data):** []MarkdownDoc. **Dependencies:** `Config` (словари синонимов).
+- **Сигнатура:** `matchHeadings(docs []MarkdownDoc, cfg Config) -> HeadingIndex`
+- **Input (data):** `[]MarkdownDoc`. **Dependencies:** `Config` (на будущее —
+  пороги; сами словари синонимов живут константами в `logic.go` слайса, чтобы
+  `Config` оставался про числовые пороги; кастомизация словарей — поздний S3+).
 - **Что делает:** нормализует H1–H3 и индексирует совпадения по словарю.
 - **Консеквент:** `HeadingIndex` — карта «нормализованный заголовок → file:line».
 
 ### buildJTBDCard
-- **Сигнатура:** `buildJTBDCard(index HeadingIndex) -> JTBDResult`
-- **Input (data):** HeadingIndex. **Dependencies:** `consumerSpec` (обязательные секции роли).
+- **Сигнатура:** `buildJTBDCard(index HeadingIndex, spec consumerSpec) -> JTBDResult`
+- **Input (data):** `HeadingIndex`, `consumerSpec` (обязательные секции роли).
 - **Что делает:** сверяет обязательные секции роли с индексом.
-- **Консеквент:** все секции есть → `PASS`; часть → `PARTIAL`; критичные
-  отсутствуют → `FAIL`. `Gaps` — отсутствующие секции; `Score` 0–100.
+- **Консеквент:** все секции есть → `PASS`; часть некритичных пропущена →
+  `PARTIAL`; хотя бы одна `critical` отсутствует → `FAIL`. `Gaps` — отсутствующие
+  секции; `Score` 0–100.
 
 (`NewAuditTarget`, `NewConfig`, `buildReport`, `store.ReadMarkdownDocs` — см. S1.)
 

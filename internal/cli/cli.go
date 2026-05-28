@@ -9,6 +9,7 @@ import (
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 	iodep "github.com/codemonstersteam/rra-docs-another/internal/io"
+	"github.com/codemonstersteam/rra-docs-another/internal/slice/jtbd"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/readability"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/structure"
 )
@@ -17,9 +18,9 @@ import (
 // go build -ldflags "-X github.com/codemonstersteam/rra-docs-another/internal/cli.Version=v1.2.3".
 var Version = "0.0.0-dev"
 
-// subcommandsTodo — подкоманды, ещё не реализованные (S3–S7).
+// subcommandsTodo — подкоманды, ещё не реализованные (S4–S7).
 var subcommandsTodo = []string{
-	"jtbd", "style", "fitness", "drift", "assess",
+	"style", "fitness", "drift", "assess",
 }
 
 // Run диспетчеризует args (обычно os.Args[1:]) и возвращает код возврата
@@ -40,6 +41,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runStructureCmd(args[1:], stdout, stderr)
 	case "readability":
 		return runReadabilityCmd(args[1:], stdout, stderr)
+	case "jtbd":
+		return runJTBDCmd(args[1:], stdout, stderr)
 	default:
 		if isTodoSubcommand(cmd) {
 			fmt.Fprintf(stderr, "rra-docs-another: подкоманда %q ещё не реализована (см. PLAN.md)\n", cmd)
@@ -81,6 +84,21 @@ func runReadabilityCmd(args []string, stdout, stderr io.Writer) int {
 	return egress(report, runErr, req, sink, stdout)
 }
 
+// runJTBDCmd — точка входа подкоманды jtbd в CLI-роутере.
+func runJTBDCmd(args []string, stdout, stderr io.Writer) int {
+	req, err := jtbd.ParseArgs(args, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "rra-docs-another jtbd: %v\n", err)
+		return 2
+	}
+
+	deps := jtbd.NewDeps()
+	sink := iodep.NewReportSink()
+
+	report, runErr := jtbd.ProcessJTBD(req, deps)
+	return egress(report, runErr, req, sink, stdout)
+}
+
 // egress — общий выход: форматирует отчёт (успех или ошибку) и возвращает код.
 func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink, stdout io.Writer) int {
 	if err != nil {
@@ -114,6 +132,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  version      показать версию")
 	fmt.Fprintln(w, "  structure    L3 структурная полнота")
 	fmt.Fprintln(w, "  readability  L1 читаемость")
+	fmt.Fprintln(w, "  jtbd         L4 JTBD-присутствие")
 	for _, c := range subcommandsTodo {
 		fmt.Fprintf(w, "  %-12s аудит (todo)\n", c)
 	}
