@@ -15,6 +15,39 @@ Go-модуль, раскладка, CLI-роутер, `version`, CI на PR. **
 «Карта режимов отказа», godog-раннер + фикстуры `repo-good`/`repo-bad`, Gherkin на
 подкоманды. **Готово:** smoke зелёный, контракт зафиксирован.
 
+## E1.1. Дотянуть обвязку компонент-тестов до полноты контракта
+
+Раннер и smoke зелёные, но контракт `cli.md` + `report.schema.json` триггерится
+не целиком. Цель — закрыть spec-уровневые пробелы единым PR. Узких фикстур
+«под один слой» **не делать** — это юнит-уровень (skill `component-tests`,
+секция «Граница со слоем юнитов»).
+
+Scope:
+
+- шаг `отчёт валидируется по api-specification/report.schema.json` + применить
+  в каждом happy-сценарии;
+- в happy-сценариях ассертить `command`, `schema_version`, `tool`, `target.path`;
+- `git init && commit` в фикстурах (`Dockerfile.runtime`), чтобы покрыть
+  `target.commit` в варианте `string`;
+- сценарии под не покрытые `error.code`: `read_error` (фикстура с `chmod 000`),
+  `config_invalid` (битый `--config`);
+- ассертить `errors[].integration` рядом с `error.code` (контракт схемы);
+- `help` / `--help` — код 0, usage в stdout;
+- `--format md` для одной подкоманды (минимум: stdout — markdown, не JSON);
+- `--out <файл>` против `--out -`;
+- `assess --up-to L4` со `layers.L5.status="skipped"` / `L6.status="skipped"`
+  (контрактная необходимость узкой фикстуры: репа, ломающая ранний слой и не
+  ломающая поздний);
+- вынести знание `--llm-*` из `runOnRepo` в явный степ;
+- в smoke сценарии, дёргающие каждый зарегистрированный степ
+  (требование skill `component-tests`, чек-лист хендоффа).
+
+Out of scope:
+
+- `tool_missing` / `tool_failed` — приезжают с S4 (style);
+- `llm_*` — уже покрыты в `fitness.feature`;
+- `--format md` для всех подкоманд (рендер — юнит-уровень).
+
 ## E2. Проектный пакет (program-design, Шаги 1–12)
 
 `docs/design/assess/`: `slices.md`, `messages.md`, карточки слайсов,
