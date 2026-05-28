@@ -95,4 +95,3 @@ func TestBuildJTBDCard_fail(t *testing.T) {
 		t.Error("buildJTBDCard FAIL: gaps должны содержать критичную отсутствующую секцию")
 	}
 }
-
