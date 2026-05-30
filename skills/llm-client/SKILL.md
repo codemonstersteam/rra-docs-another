@@ -262,3 +262,38 @@ func detectRole(r *http.Request) string {
 - [ ] Стаб различает роли по маркеру `role:<key>` в промпте
 - [ ] Реальные ответы сохранены в `testdata/real-responses/`
 - [ ] Сценарии для хорошей и плохой репы зафиксированы в `.feature`
+
+---
+
+## Перед коммитом
+
+Два обязательных шага — системные ошибки CI из практики:
+
+**1. gofmt**
+
+```bash
+gofmt -l ./internal/slice/<name>/
+```
+
+Пустой вывод = чисто. Иначе:
+
+```bash
+gofmt -w ./internal/slice/<name>/
+```
+
+Проверять все `.go`-файлы слайса перед каждым коммитом. gofmt-ошибка
+в CI — признак того, что шаг пропущен, а не что правило новое.
+
+**2. go.sum в Dockerfile**
+
+Если в слайсе появилась новая зависимость (`go.mod` изменился):
+- убедиться что `go.sum` закоммичен (`git add go.sum`)
+- убедиться что `Dockerfile.runtime` (или аналог) копирует `go.sum`:
+  ```dockerfile
+  COPY go.mod go.sum ./   # оба файла, не только go.mod
+  RUN go mod download
+  ```
+
+Без `go.sum` в образе `go build` падает с
+`missing go.sum entry for module providing package <dep>`
+даже если go.sum есть в репозитории.
