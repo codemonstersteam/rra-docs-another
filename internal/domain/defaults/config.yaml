@@ -3,6 +3,10 @@ llm:
   model: claude-sonnet-4-6
   api_key_env: ANTHROPIC_API_KEY
   base_url: ""
+  # Задержка между последовательными LLM-вызовами (мс).
+  # 0 = без паузы (для тестов со стабом).
+  # Для реального Anthropic API tier-1 рекомендуется 10000.
+  call_delay_ms: 0
 
 prompts:
   maintainer: |

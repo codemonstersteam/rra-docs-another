@@ -98,11 +98,11 @@ func headCommit(root string) string {
 // configYAML — структура YAML-конфига для парсинга.
 type configYAML struct {
 	LLM struct {
-		Provider     string `yaml:"provider"`
-		Model        string `yaml:"model"`
-		APIKeyEnv    string `yaml:"api_key_env"`
-		BaseURL      string `yaml:"base_url"`
-		CallDelayMs  int    `yaml:"call_delay_ms"`
+		Provider    string `yaml:"provider"`
+		Model       string `yaml:"model"`
+		APIKeyEnv   string `yaml:"api_key_env"`
+		BaseURL     string `yaml:"base_url"`
+		CallDelayMs int    `yaml:"call_delay_ms"`
 	} `yaml:"llm"`
 	Docs       []string          `yaml:"docs"`
 	Prompts    map[string]string `yaml:"prompts"`
