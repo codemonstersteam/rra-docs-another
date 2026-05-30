@@ -9,6 +9,7 @@ import (
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 	iodep "github.com/codemonstersteam/rra-docs-another/internal/io"
+	"github.com/codemonstersteam/rra-docs-another/internal/slice/fitness"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/jtbd"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/readability"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/structure"
@@ -18,9 +19,9 @@ import (
 // go build -ldflags "-X github.com/codemonstersteam/rra-docs-another/internal/cli.Version=v1.2.3".
 var Version = "0.0.0-dev"
 
-// subcommandsTodo — подкоманды, ещё не реализованные (S4–S7).
+// subcommandsTodo — подкоманды, ещё не реализованные (S4, S6–S7).
 var subcommandsTodo = []string{
-	"style", "fitness", "drift", "assess",
+	"style", "drift", "assess",
 }
 
 // Run диспетчеризует args (обычно os.Args[1:]) и возвращает код возврата
@@ -43,6 +44,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runReadabilityCmd(args[1:], stdout, stderr)
 	case "jtbd":
 		return runJTBDCmd(args[1:], stdout, stderr)
+	case "fitness":
+		return runFitnessCmd(args[1:], stdout, stderr)
 	default:
 		if isTodoSubcommand(cmd) {
 			fmt.Fprintf(stderr, "rra-docs-another: подкоманда %q ещё не реализована (см. PLAN.md)\n", cmd)
@@ -99,6 +102,27 @@ func runJTBDCmd(args []string, stdout, stderr io.Writer) int {
 	return egress(report, runErr, req, sink, stdout)
 }
 
+// runFitnessCmd — точка входа подкоманды fitness в CLI-роутере.
+func runFitnessCmd(args []string, stdout, stderr io.Writer) int {
+	req, err := fitness.ParseArgs(args, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "rra-docs-another fitness: %v\n", err)
+		return 2
+	}
+
+	sink := iodep.NewReportSink()
+
+	cfg, cfgErr := domain.NewConfig(req)
+	if cfgErr != nil {
+		return egress(domain.Report{}, cfgErr, req, sink, stdout)
+	}
+
+	deps := fitness.NewDeps(req, cfg)
+
+	report, runErr := fitness.ProcessFitness(req, deps)
+	return egress(report, runErr, req, sink, stdout)
+}
+
 // egress — общий выход: форматирует отчёт (успех или ошибку) и возвращает код.
 func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink, stdout io.Writer) int {
 	if err != nil {
@@ -133,6 +157,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  structure    L3 структурная полнота")
 	fmt.Fprintln(w, "  readability  L1 читаемость")
 	fmt.Fprintln(w, "  jtbd         L4 JTBD-присутствие")
+	fmt.Fprintln(w, "  fitness      L5 JTBD-пригодность (LLM)")
 	for _, c := range subcommandsTodo {
 		fmt.Fprintf(w, "  %-12s аудит (todo)\n", c)
 	}

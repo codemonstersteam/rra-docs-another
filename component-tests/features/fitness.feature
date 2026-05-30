@@ -1,4 +1,3 @@
-@wip
 Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
 
   # Контракт: report.schema.json (jtbd — ЧЕТЫРЕ независимых результата, каждый
@@ -53,6 +52,37 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
     When запускаю "fitness" на репозитории "repo-good"
     Then код возврата 2
     And в errors[] есть error.code "llm_unavailable" с integration "LLMClient"
+
+  Scenario: плохая документация — все четыре роли FAIL
+    # Вердикты зафиксированы реальным Sonnet (2026-05-30): repo-bad содержит только
+    # README.md с канцелярским placeholder-текстом, остальные docs отсутствуют.
+    # Источник: testdata/real-responses/repo-bad-fitness.json.
+    Given LLM-стаб в режиме "bad_repo"
+    When запускаю "fitness" на репозитории "repo-bad"
+    Then код возврата 1
+    And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "FAIL"
+    And отчёт содержит непустое JSON-поле "jtbd.maintainer.gaps"
+    And отчёт содержит JSON-поле "jtbd.consumer.status" со значением "FAIL"
+    And отчёт содержит JSON-поле "jtbd.manager.status" со значением "FAIL"
+    And отчёт содержит JSON-поле "jtbd.agent.status" со значением "FAIL"
+
+  Scenario: реальные docs passkey-demo-api — consumer FAIL, остальные PASS
+    # Вердикты зафиксированы реальным Sonnet (2026-05-30).
+    # Данные: testdata/repo-passkey/ + testdata/real-responses/passkey-demo-api-fitness.json.
+    Given LLM-стаб в режиме "passkey"
+    When запускаю "fitness" на репозитории "repo-passkey"
+    Then код возврата 1
+    And отчёт содержит JSON-поле "jtbd.consumer.status" со значением "FAIL"
+    And отчёт содержит непустое JSON-поле "jtbd.consumer.gaps"
+    And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "PASS"
+    And отчёт содержит JSON-поле "jtbd.manager.status" со значением "PASS"
+    And отчёт содержит JSON-поле "jtbd.agent.status" со значением "PASS"
+
+  Scenario: LLM оборачивает JSON в markdown-блок — клиент обязан распарсить
+    Given LLM-стаб в режиме "markdown_fenced"
+    When запускаю "fitness" на репозитории "repo-good"
+    Then код возврата 0
+    And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "PASS"
 
   Scenario: битый файл --config
     Given битый файл конфигурации

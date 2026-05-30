@@ -59,6 +59,25 @@ func (s RepoStore) ReadMarkdownDocs(target domain.AuditTarget) ([]domain.Markdow
 	return docs, nil
 }
 
+// ReadMarkdownDocsByList читает только указанные файлы (пути относительно корня репо).
+// Файлы, которых нет на диске, пропускаются.
+func (s RepoStore) ReadMarkdownDocsByList(target domain.AuditTarget, paths []string) ([]domain.MarkdownDoc, error) {
+	root := target.Root()
+	var docs []domain.MarkdownDoc
+	for _, rel := range paths {
+		absPath := filepath.Join(root, rel)
+		doc, err := readOneMarkdown(absPath, rel)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("%w: %s", domain.ErrReadError, err)
+		}
+		docs = append(docs, doc)
+	}
+	return docs, nil
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func walkFiles(root string) ([]string, map[string]time.Time, error) {
