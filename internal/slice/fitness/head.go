@@ -4,7 +4,7 @@ import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
 // ProcessFitness — голова слайса S5 (fitness, L5).
 // Пайп: NewAuditTarget → NewLLMConfig (fail-fast) → store.ReadMarkdownDocsByList →
-// buildJTBDPromptSet → llm.Simulate → scoreFitness → buildReport.
+// buildJTBDPromptSet → llm.Ask → scoreFitness → buildReport.
 func ProcessFitness(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
@@ -28,7 +28,7 @@ func ProcessFitness(req domain.Request, deps Deps) (domain.Report, error) {
 
 	promptSet := buildJTBDPromptSet(docs, deps.Config)
 
-	verdicts, err := deps.LLM.Simulate(promptSet)
+	verdicts, err := deps.LLM.Ask(promptSet)
 	if err != nil {
 		return domain.Report{}, err
 	}

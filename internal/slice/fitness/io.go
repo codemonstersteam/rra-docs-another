@@ -49,10 +49,10 @@ func NewLLMClient(provider, baseURL, model string, callDelayMs int) LLMClient {
 	}
 }
 
-// Simulate запускает LLM-оценку для каждого промпта из набора.
+// Ask запускает LLM-оценку для каждого промпта из набора.
 // Маппит HTTP-ошибки провайдера в доменные: 429→ErrLLMRateLimited,
 // 5xx/сеть→ErrLLMUnavailable, превышение токенов→ErrLLMBudgetExceeded.
-func (c LLMClient) Simulate(set domain.JTBDPromptSet) ([]domain.LLMVerdict, error) {
+func (c LLMClient) Ask(set domain.JTBDPromptSet) ([]domain.LLMVerdict, error) {
 	envVar := "ANTHROPIC_API_KEY"
 	if c.provider == "openai" {
 		envVar = "OPENAI_API_KEY"

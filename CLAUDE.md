@@ -28,7 +28,7 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 
 Следующий — **S5 `fitness`** (L5, LLM) по `docs/design/assess/slices/05-fitness.md`,
 ветка `feat/slice-fitness`. Дизайн утверждён с оператором: новый I/O `LLMClient`
-(`Simulate(JTBDPromptSet) -> []LLMVerdict`); **проектный конфиг во внешнем YAML**
+(`Ask(JTBDPromptSet) -> []LLMVerdict`); **проектный конфиг во внешнем YAML**
 (`--config`, дефолт `go:embed`) — выносим `llm`-подключение и `prompts` ролей,
 первая Go-зависимость `gopkg.in/yaml.v3` (ADR 0003); секретов в YAML нет
 (`llm.api_key_env` = имя env-переменной). Загрузчик конфига — общая инфраструктура

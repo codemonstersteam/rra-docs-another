@@ -254,7 +254,7 @@ func (p JTBDPrompt) Consumer() string { return p.consumer }
 func (p JTBDPrompt) Text() string     { return p.text }
 func (p JTBDPrompt) Budget() int      { return p.budget }
 
-// JTBDPromptSet — набор четырёх JTBDPrompt, один вход LLMClient.Simulate.
+// JTBDPromptSet — набор четырёх JTBDPrompt, один вход LLMClient.Ask.
 type JTBDPromptSet struct {
 	prompts []JTBDPrompt
 }
@@ -265,7 +265,7 @@ func NewJTBDPromptSet(prompts []JTBDPrompt) JTBDPromptSet {
 
 func (s JTBDPromptSet) Prompts() []JTBDPrompt { return s.prompts }
 
-// LLMVerdict — сырой провайдер-агностичный вердикт от LLMClient.Simulate.
+// LLMVerdict — сырой провайдер-агностичный вердикт от LLMClient.Ask.
 type LLMVerdict struct {
 	Consumer  string
 	RawStatus string
