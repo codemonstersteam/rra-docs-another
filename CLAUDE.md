@@ -19,19 +19,27 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
 | Проектный пакет (E2) | done (дизайн-PR влит = аппрув) |
-| Реализация слайсов S1–S7 (E3–E9) | in progress (S1 `structure` в main) |
+| Реализация слайсов S1–S7 (E3–E9) | in progress (S1–S3 в main) |
 
 ## Следующий шаг
 
-**S2 `readability`** (L1) — реализация Sonnet'ом по `docs/design/assess/slices/02-readability.md`,
-ветка `feat/slice-readability`. Голова и иерархию утверждать с оператором ДО кода
-(он принимает в IDE). Снять `@wip` с `readability.feature`.
+**S4 `style` (L2) отложен в TBD** — внешние тулзы (Vale/markdownlint) не тянем,
+состав L2 проектируем отдельно и научно (см. `backlog.md` → «Где мы сейчас»).
+
+Следующий — **S5 `fitness`** (L5, LLM) по `docs/design/assess/slices/05-fitness.md`,
+ветка `feat/slice-fitness`. Дизайн утверждён с оператором: новый I/O `LLMClient`
+(`Simulate(JTBDPromptSet) -> []LLMVerdict`); **проектный конфиг во внешнем YAML**
+(`--config`, дефолт `go:embed`) — выносим `llm`-подключение и `prompts` ролей,
+первая Go-зависимость `gopkg.in/yaml.v3` (ADR 0003); секретов в YAML нет
+(`llm.api_key_env` = имя env-переменной). Загрузчик конфига — общая инфраструктура
+в `internal/cli`. Компонент-харнесс готов — снять `@wip` с `fitness.feature`.
+Реализация Sonnet'ом, голову `runFitness` уже сверили. Затем S7 `assess`, S6 `drift`.
 
 Конвенция слайса (как в `ubik/passkey-demo-api`, см. `infrastructure.md`):
 самодостаточный пакет `internal/slice/<name>/` — `head.go` (`Process<Slice>` —
 голова), `adapter.go` (парсинг), `logic.go`, `register.go` (`Deps`+`NewDeps`).
-Общие `internal/{domain,io,cli}` (egress в `cli`). Образец — S1 в main.
-Дальше S3→S6, затем S7 `assess`. S8 (`drift --semantic`) — поздний.
+Общие `internal/{domain,io,cli}` (egress в `cli`). Образцы — S1–S3 в main.
+Дальше S5 `fitness` (LLM) → S6 `drift` → S7 `assess`. S8 (`drift --semantic`) — поздний.
 
 ## Принятые решения
 
@@ -42,6 +50,10 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 - L6 = универсальный дрейф (L6a, без ИИ) + опциональный семантический тир L6c.
   Дисциплина-сверка (бывший L6b) сюда НЕ входит — она в гейте `rra-docs`.
 - I/O изолирован в `RepoStore` / `LinterRunner` / `LLMClient` / `ReportSink`.
+- Проектный конфиг (`--config`) — внешний YAML (дефолт через `go:embed`): словари
+  L4, профиль L2, пороги, `llm`-подключение и `prompts` ролей L5. Первая Go-зависимость
+  `gopkg.in/yaml.v3`. Секретов нет — `llm.api_key_env` указывает имя env-переменной,
+  ключ из env. Загрузчик — общая инфраструктура в `internal/cli`. См. ADR 0003.
 - LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
   эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001.
 - CLI — stdlib (subcommand-switch в `internal/cli`), без cobra.

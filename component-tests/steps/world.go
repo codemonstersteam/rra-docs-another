@@ -27,6 +27,9 @@ type World struct {
 	llmControlURL string // control-эндпоинт стаба (LLM_STUB_CONTROL_URL)
 	testdataDir   string // корень фикстур относительно ./steps
 
+	dropLLMKey bool   // не прокидывать ключ LLM в env (сценарий «нет ключа»)
+	configPath string // путь к --config (сценарий «битый конфиг»); пусто — без флага
+
 	lastExit   int
 	lastStdout []byte
 	lastStderr []byte
@@ -43,6 +46,8 @@ func newWorld() *World {
 }
 
 func (w *World) beforeScenario(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+	w.dropLLMKey = false
+	w.configPath = ""
 	w.lastExit = 0
 	w.lastStdout = nil
 	w.lastStderr = nil

@@ -19,6 +19,8 @@ func (w *World) registerCLISteps(ctx *godog.ScenarioContext) {
 	ctx.Step(`^запускаю бинарь с аргументами "([^"]*)"$`, w.runRaw)
 	ctx.Step(`^запускаю "([^"]+)" на репозитории "([^"]+)"$`, w.runOnRepo)
 	ctx.Step(`^LLM-стаб в режиме "([^"]+)"$`, w.setStubMode)
+	ctx.Step(`^ключ LLM не задан в окружении$`, w.setNoLLMKey)
+	ctx.Step(`^битый файл конфигурации$`, w.setBrokenConfig)
 
 	// Проверки
 	ctx.Step(`^код возврата (\d+)$`, w.assertExit)
@@ -26,6 +28,7 @@ func (w *World) registerCLISteps(ctx *godog.ScenarioContext) {
 	ctx.Step(`^отчёт содержит непустое JSON-поле "([^"]+)"$`, w.assertFieldNonEmpty)
 	ctx.Step(`^отчёт содержит JSON-поле "([^"]+)"$`, w.assertFieldPresent)
 	ctx.Step(`^в errors\[\] есть error\.code "([^"]+)"$`, w.assertErrorCode)
+	ctx.Step(`^в errors\[\] есть error\.code "([^"]+)" с integration "([^"]+)"$`, w.assertErrorCodeIntegration)
 	ctx.Step(`^stderr содержит "([^"]+)"$`, w.assertStderr)
 }
 
@@ -38,7 +41,12 @@ func (w *World) runOnRepo(ctx context.Context, cmd, fixture string) error {
 	env := []string{}
 	if cmd == "fitness" || cmd == "assess" || cmd == "drift" {
 		args = append(args, "--llm-provider", "openai", "--llm-base-url", w.llmBaseURL)
-		env = append(env, "OPENAI_API_KEY=test")
+		if !w.dropLLMKey {
+			env = append(env, "OPENAI_API_KEY=test")
+		}
+	}
+	if w.configPath != "" {
+		args = append(args, "--config", w.configPath)
 	}
 	return w.run(ctx, args, env...)
 }
@@ -53,6 +61,20 @@ func (w *World) setStubMode(mode string) error {
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("LLM-стаб /control: код %d", resp.StatusCode)
 	}
+	return nil
+}
+
+// setNoLLMKey помечает запуск как «без ключа в env»: runOnRepo не прокинет
+// OPENAI_API_KEY → NewLLMConfig падает в ErrLLMUnavailable до вызова LLM.
+func (w *World) setNoLLMKey() error {
+	w.dropLLMKey = true
+	return nil
+}
+
+// setBrokenConfig направляет --config на заведомо битый YAML-файл фикстуры,
+// чтобы загрузчик конфига вернул config_invalid.
+func (w *World) setBrokenConfig() error {
+	w.configPath = filepath.Join(w.testdataDir, "broken-config.yml")
 	return nil
 }
 
@@ -105,6 +127,30 @@ func (w *World) assertErrorCode(code string) error {
 		if m, ok := e.(map[string]any); ok && scalar(m["code"]) == code {
 			return nil
 		}
+	}
+	return fmt.Errorf("в errors[] нет error.code=%q", code)
+}
+
+// assertErrorCodeIntegration проверяет, что в errors[] есть запись с заданными
+// error.code И errors[].integration (контракт схемы: где произошёл отказ).
+func (w *World) assertErrorCodeIntegration(code, integration string) error {
+	got, ok := w.field("errors")
+	if !ok {
+		return fmt.Errorf("в отчёте нет errors[]")
+	}
+	list, ok := got.([]any)
+	if !ok {
+		return fmt.Errorf("errors не массив")
+	}
+	for _, e := range list {
+		m, ok := e.(map[string]any)
+		if !ok || scalar(m["code"]) != code {
+			continue
+		}
+		if g := scalar(m["integration"]); g != integration {
+			return fmt.Errorf("error.code=%q: integration=%q, ожидали %q", code, g, integration)
+		}
+		return nil
 	}
 	return fmt.Errorf("в errors[] нет error.code=%q", code)
 }

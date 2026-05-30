@@ -1,0 +1,5 @@
+# Заведомо битый YAML — фикстура для сценария config_invalid.
+# Незакрытая кавычка делает документ невалидным для yaml.v3.
+llm:
+  provider: "anthropic
+  model: ]invalid[ : : :
