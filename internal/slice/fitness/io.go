@@ -16,15 +16,17 @@ const tokenBudgetLimit = 300_000
 
 // LLMClient — автономный I/O-объект для OpenAI-совместимого LLM-провайдера.
 type LLMClient struct {
-	provider string
-	baseURL  string
-	model    string
-	http     *http.Client
+	provider    string
+	baseURL     string
+	model       string
+	callDelayMs int
+	http        *http.Client
 }
 
 // NewLLMClient создаёт LLMClient с параметрами подключения.
+// callDelayMs — пауза между последовательными вызовами (0 = без паузы).
 // Ключ API читается из env при каждом вызове Simulate.
-func NewLLMClient(provider, baseURL, model string) LLMClient {
+func NewLLMClient(provider, baseURL, model string, callDelayMs int) LLMClient {
 	if provider == "" {
 		provider = "anthropic"
 	}
@@ -39,10 +41,11 @@ func NewLLMClient(provider, baseURL, model string) LLMClient {
 		baseURL = "https://api.anthropic.com/v1"
 	}
 	return LLMClient{
-		provider: provider,
-		baseURL:  baseURL,
-		model:    model,
-		http:     &http.Client{Timeout: 30 * time.Second},
+		provider:    provider,
+		baseURL:     baseURL,
+		model:       model,
+		callDelayMs: callDelayMs,
+		http:        &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -61,8 +64,8 @@ func (c LLMClient) Simulate(set domain.JTBDPromptSet) ([]domain.LLMVerdict, erro
 
 	verdicts := make([]domain.LLMVerdict, 0, len(set.Prompts()))
 	for i, p := range set.Prompts() {
-		if i > 0 {
-			time.Sleep(10 * time.Second)
+		if i > 0 && c.callDelayMs > 0 {
+			time.Sleep(time.Duration(c.callDelayMs) * time.Millisecond)
 		}
 		v, err := c.call(p, key)
 		if err != nil {

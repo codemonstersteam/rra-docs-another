@@ -98,10 +98,11 @@ func headCommit(root string) string {
 // configYAML — структура YAML-конфига для парсинга.
 type configYAML struct {
 	LLM struct {
-		Provider  string `yaml:"provider"`
-		Model     string `yaml:"model"`
-		APIKeyEnv string `yaml:"api_key_env"`
-		BaseURL   string `yaml:"base_url"`
+		Provider     string `yaml:"provider"`
+		Model        string `yaml:"model"`
+		APIKeyEnv    string `yaml:"api_key_env"`
+		BaseURL      string `yaml:"base_url"`
+		CallDelayMs  int    `yaml:"call_delay_ms"`
 	} `yaml:"llm"`
 	Docs       []string          `yaml:"docs"`
 	Prompts    map[string]string `yaml:"prompts"`
@@ -117,6 +118,7 @@ type Config struct {
 	readabilityMin     int
 	llmPrompts         map[string]string
 	docs               []string
+	llmCallDelayMs     int
 }
 
 func (c Config) DriftThresholdDays() int { return c.driftThresholdDays }
@@ -124,6 +126,10 @@ func (c Config) ReadabilityMin() int     { return c.readabilityMin }
 
 // Docs возвращает список doc-файлов для проверки (относительные пути от корня репо).
 func (c Config) Docs() []string { return c.docs }
+
+// LLMCallDelayMs возвращает задержку между последовательными LLM-вызовами (мс).
+// 0 = без задержки (дефолт для тестов). Для реального API рекомендуется 10000.
+func (c Config) LLMCallDelayMs() int { return c.llmCallDelayMs }
 
 // LLMPrompt возвращает промпт для роли (maintainer|consumer|manager|agent).
 func (c Config) LLMPrompt(role string) string {
@@ -165,6 +171,7 @@ func parseConfigYAML(data []byte) (Config, error) {
 		readabilityMin:     rm,
 		llmPrompts:         raw.Prompts,
 		docs:               raw.Docs,
+		llmCallDelayMs:     raw.LLM.CallDelayMs,
 	}, nil
 }
 
