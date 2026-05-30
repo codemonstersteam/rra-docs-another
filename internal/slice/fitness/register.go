@@ -17,7 +17,7 @@ type Deps struct {
 func NewDeps(req domain.Request, cfg domain.Config) Deps {
 	return Deps{
 		Store:  iodep.NewRepoStore(),
-		LLM:   NewLLMClient(req.LLMProvider, req.LLMBaseURL, req.LLMModel),
+		LLM:    NewLLMClient(req.LLMProvider, req.LLMBaseURL, req.LLMModel),
 		Config: cfg,
 	}
 }
