@@ -60,11 +60,41 @@
   снят со `style.feature` (happy + `tool_missing` + `tool_failed`); зелёные.
 
 ### TICKET S5 — slice fitness: CLI `fitness <path>`
-- Спека: `slices/05-fitness.md`. Зависимости: S1.
+- Спека: `slices/05-fitness.md` + ADR `docs/adr/0003-yaml-config.md`. Зависимости: S1.
 - Ветка `feat/slice-fitness`.
-- DoD: `NewLLMConfig`; `buildJTBDPromptSet`; `LLMClient.Simulate` (anthropic +
-  openai-адаптеры); `scoreFitness`; `@wip` снят с `fitness.feature` (happy через
-  стаб `healthy` + три `llm_*`-отказа); зелёные.
+
+**Реализация (Sonnet):**
+- `internal/slice/fitness/`: адаптер `parseFitnessArgs` (вкл. парсинг `--llm-provider`/
+  `--llm-base-url`/`--llm-model` — их в CLI ещё нет), голова `runFitness`,
+  `NewLLMConfig`, `buildJTBDPromptSet`, `scoreFitness`, `register.go`.
+- `internal/io/llmclient.go`: `LLMClient.Simulate(JTBDPromptSet) -> ([]LLMVerdict, error)`,
+  **4 прогона внутри** (фан-аут не в голове), anthropic native + openai-совм. адаптеры,
+  маппинг ошибок в `llm_rate_limited`/`llm_unavailable`/`llm_budget_exceeded`.
+- **Проектный конфиг — внешний YAML** (`--config`, дефолт через `go:embed`):
+  завести `gopkg.in/yaml.v3` (`go mod tidy`, первая Go-зависимость); загрузчик —
+  **общая инфраструктура в `internal/cli`** (I/O на краю, не в адаптере/голове),
+  битый файл → `config_invalid`; инжект value-config: `llm`→`NewLLMClient`,
+  `prompts`→`Deps` слайса. Приоритет: флаг `--llm-*` > файл > вшитый дефолт.
+- **Секретов в YAML нет:** `llm.api_key_env` = имя env-переменной (дефолт
+  `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`); ключ читается из env в `NewLLMConfig`;
+  нет ключа → `ErrLLMUnavailable` **до** I/O (LLM не вызывается).
+- **Дефолтные (вшитые) промпты четырёх ролей ОБЯЗАНЫ нести маркер `role:<key>`**
+  (`key ∈ maintainer|consumer|manager|agent`) — контракт со стабом
+  (`llm-stub` различает вердикт по роли через этот маркер). Без него режим `mixed`
+  и фан-аут в четыре секции не зеленеют.
+
+**Обвязка компонент-тестов — УЖЕ СДЕЛАНА opus (не переделывать):**
+- `fitness.feature` (7 сценариев): happy `healthy` (четыре PASS + `command`/`score`/
+  `gaps`), `mixed` (независимость и не-усреднение: agent FAIL/consumer PARTIAL → код 1),
+  три `llm_*`-отказа с `integration "LLMClient"`, «нет ключа» → `llm_unavailable`,
+  битый `--config` → `config_invalid`.
+- `llm-stub` различает роль (`role:<key>`) + режимы `healthy`/`mixed`; степы
+  `assertErrorCodeIntegration`/`setNoLLMKey`/`setBrokenConfig`; фикстура
+  `testdata/broken-config.yml`. Стаб+степы собираются (`go vet` зелёный).
+
+**DoD:** всё из «Реализация» сделано; `@wip` снят с `fitness.feature`; все 7
+сценариев зелёные в Docker Compose; юниты по формуле (`NewLLMConfig` 3, `buildJTBDPromptSet`
+2, `scoreFitness` 2); локальный CI (`vet`/`test`/`gofmt`) зелёный; PR смержен.
 
 ### TICKET S6 — slice drift: CLI `drift <path>`
 - Спека: `slices/06-drift.md`. Зависимости: S1.

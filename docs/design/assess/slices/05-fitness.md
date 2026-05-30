@@ -79,11 +79,46 @@ LLM не вызывается.
 
 | Сценарий | Then-шаг | Кто обеспечивает |
 |---|---|---|
-| стаб отвечает | код возврата 0 | egress `exitCode` |
-| стаб отвечает | `jtbd.maintainer.status` = "PASS" | `llm.Simulate`→`scoreFitness`→`buildReport` |
-| LLM ограничивает частоту | код возврата 2 | egress ← `llm.Simulate` (`ErrLLMRateLimited`) |
-| LLM ограничивает частоту | `errors[]` `llm_rate_limited` | `buildErrorReport` |
-| LLM недоступен | `errors[]` `llm_unavailable` | `buildErrorReport` ← `ErrLLMUnavailable` |
-| бюджет превышен | `errors[]` `llm_budget_exceeded` | `buildErrorReport` ← `ErrLLMBudgetExceeded` |
+| стаб `healthy` — четыре PASS | код возврата 0 | egress `exitCode` |
+| стаб `healthy` — четыре PASS | `command`="fitness" | `buildReport` |
+| стаб `healthy` — четыре PASS | `jtbd.{maintainer,consumer,manager,agent}.status`="PASS" | `llm.Simulate`→`scoreFitness`→`buildReport` (фан-аут в 4 секции) |
+| стаб `healthy` — четыре PASS | `jtbd.maintainer.score` непустой, `.gaps` присутствует | `scoreFitness` (поля схемы `jtbdResult`) |
+| стаб `mixed` — score независимы | код возврата 1 | egress `exitCode` (JTBD `FAIL` → 1) |
+| стаб `mixed` — score независимы | `jtbd.agent.status`="FAIL", `.gaps` непустой | `scoreFitness` (gaps протекают) |
+| стаб `mixed` — score независимы | `jtbd.consumer.status`="PARTIAL", `maintainer`/`manager`="PASS" | не-усреднение: провал роли не тянет другие |
+| LLM ограничивает частоту | код 2 + `errors[]` `llm_rate_limited` integration `LLMClient` | egress ← `llm.Simulate` (`ErrLLMRateLimited`) |
+| LLM недоступен | код 2 + `errors[]` `llm_unavailable` integration `LLMClient` | `buildErrorReport` ← `ErrLLMUnavailable` |
+| бюджет превышен | код 2 + `errors[]` `llm_budget_exceeded` integration `LLMClient` | `buildErrorReport` ← `ErrLLMBudgetExceeded` |
+| ключ не задан в env — LLM не вызывается | код 2 + `errors[]` `llm_unavailable` integration `LLMClient` | `NewLLMConfig` (fail-fast до I/O) |
+| битый `--config` | код 2 + `errors[]` `config_invalid` | загрузчик конфига (`internal/cli`) |
 
 [x] Gherkin-mapping сверен
+
+## Контракт стаб ↔ дефолтные промпты (для компонент-тестов)
+
+`llm-stub` различает вердикт по роли, отыскивая в теле запроса маркер
+**`role:<key>`** (`key ∈ maintainer|consumer|manager|agent`). Поэтому **каждый
+дефолтный (вшитый `go:embed`) промпт обязан нести свой `role:<key>`** — иначе стаб
+не различит роли и фан-аут в четыре секции не специфицируется. Реальный провайдер
+маркер игнорирует; стаб реагирует на содержимое промпта детерминированно, как
+реагировала бы модель. Режимы стаба: `healthy` (все PASS, разные score),
+`mixed` (consumer PARTIAL, agent FAIL — независимость и не-усреднение),
+`rate_limited`/`unavailable`/`budget_exceeded` (режимы отказа).
+
+## Решения по дизайну (подключение и промпты — внешний YAML)
+
+См. `docs/adr/0003-yaml-config.md`.
+
+- **Подключение LLM и промпты четырёх ролей выносятся в проектный YAML** (`--config`,
+  дефолт вшит через `go:embed`), чтобы промпты дорабатывались без пересборки.
+  Зависимость `gopkg.in/yaml.v3` — первая в проекте, только на парсинг конфига.
+- **Загрузчик конфига — общая инфраструктура**, не часть слайса: читается на
+  бутстрапе в `internal/cli` (I/O на краю), парсится в value-конфиг и инжектится —
+  `llm`-секция в `NewLLMClient(conn)`, `prompts`-секция в `Deps`/`Config` слайса
+  (вход для `buildJTBDPromptSet`). Битый файл → `config_invalid`.
+- **Секретов в YAML нет.** `llm.api_key_env` указывает лишь *имя* env-переменной с
+  ключом (по умолчанию `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`); сам ключ читается из
+  env в `NewLLMConfig`. Нет ключа в указанной env → `ErrLLMUnavailable` до I/O.
+- **Приоритет значений:** флаг `--llm-*` > `--config` > вшитый дефолт.
+- `buildJTBDPromptSet(docs, cfg)` берёт промпты и бюджеты из загруженного конфига,
+  а не из хардкода — иначе голова/листья не меняются.

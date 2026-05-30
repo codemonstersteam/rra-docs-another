@@ -4,12 +4,18 @@
 package domain
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+//go:embed defaults/config.yaml
+var defaultConfigYAML []byte
 
 // ── Доменные sentinel-ошибки ────────────────────────────────────────────────
 
@@ -48,10 +54,7 @@ type AuditTarget struct {
 	commit string
 }
 
-// Root возвращает абсолютный путь к корню репозитория.
-func (t AuditTarget) Root() string { return t.root }
-
-// Commit возвращает HEAD, если это git-репо, иначе "".
+func (t AuditTarget) Root() string   { return t.root }
 func (t AuditTarget) Commit() string { return t.commit }
 
 // NewAuditTarget валидирует путь и создаёт AuditTarget.
@@ -71,7 +74,6 @@ func NewAuditTarget(req Request) (AuditTarget, error) {
 	if !info.IsDir() {
 		return AuditTarget{}, fmt.Errorf("%w: %s не директория", ErrPathNotFound, abs)
 	}
-	// Проверяем права чтения через ReadDir.
 	if _, err := os.ReadDir(abs); err != nil {
 		return AuditTarget{}, fmt.Errorf("%w: %s", ErrReadError, abs)
 	}
@@ -79,56 +81,196 @@ func NewAuditTarget(req Request) (AuditTarget, error) {
 	return AuditTarget{root: abs, commit: commit}, nil
 }
 
-// headCommit пытается прочитать HEAD-коммит из .git/HEAD.
 func headCommit(root string) string {
 	data, err := os.ReadFile(filepath.Join(root, ".git", "HEAD"))
 	if err != nil {
 		return ""
 	}
 	head := string(data)
-	// Если HEAD указывает на ref, возвращаем строку как есть (укороченная форма).
-	// Для целей S1 достаточно непустой строки.
 	if len(head) > 0 {
 		return head[:min(len(head), 40)]
 	}
 	return ""
 }
 
+// ── Config ───────────────────────────────────────────────────────────────────
+
+// configYAML — структура YAML-конфига для парсинга.
+type configYAML struct {
+	LLM struct {
+		Provider    string `yaml:"provider"`
+		Model       string `yaml:"model"`
+		APIKeyEnv   string `yaml:"api_key_env"`
+		BaseURL     string `yaml:"base_url"`
+		CallDelayMs int    `yaml:"call_delay_ms"`
+	} `yaml:"llm"`
+	Docs       []string          `yaml:"docs"`
+	Prompts    map[string]string `yaml:"prompts"`
+	Thresholds struct {
+		DriftDays      int `yaml:"drift_days"`
+		ReadabilityMin int `yaml:"readability_min"`
+	} `yaml:"thresholds"`
+}
+
 // Config — валидированный проектный конфиг (неэкспортируемые поля).
 type Config struct {
 	driftThresholdDays int
 	readabilityMin     int
+	llmPrompts         map[string]string
+	docs               []string
+	llmCallDelayMs     int
 }
 
-// DriftThresholdDays — порог устаревания документации в днях.
 func (c Config) DriftThresholdDays() int { return c.driftThresholdDays }
+func (c Config) ReadabilityMin() int     { return c.readabilityMin }
 
-// ReadabilityMin — минимальный допустимый балл читаемости (Flesch Reading Ease, 0–100).
-// Значения ниже порога — предупреждение (warning), не блокер.
-func (c Config) ReadabilityMin() int { return c.readabilityMin }
+// Docs возвращает список doc-файлов для проверки (относительные пути от корня репо).
+func (c Config) Docs() []string { return c.docs }
+
+// LLMCallDelayMs возвращает задержку между последовательными LLM-вызовами (мс).
+// 0 = без задержки (дефолт для тестов). Для реального API рекомендуется 10000.
+func (c Config) LLMCallDelayMs() int { return c.llmCallDelayMs }
+
+// LLMPrompt возвращает промпт для роли (maintainer|consumer|manager|agent).
+func (c Config) LLMPrompt(role string) string {
+	if c.llmPrompts == nil {
+		return ""
+	}
+	return c.llmPrompts[role]
+}
 
 // NewConfig валидирует и создаёт Config.
-// Если ConfigPath пуст — берутся встроенные дефолты.
+// Если ConfigPath пуст — берётся встроенный дефолт (go:embed).
 // Failure: ErrConfigInvalid.
 func NewConfig(req Request) (Config, error) {
 	if req.ConfigPath == "" {
-		return Config{driftThresholdDays: 90, readabilityMin: 50}, nil
+		return parseConfigYAML(defaultConfigYAML)
 	}
-	cfg, err := parseConfigFile(req.ConfigPath)
+	data, err := os.ReadFile(req.ConfigPath)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrConfigInvalid, err)
 	}
-	return cfg, nil
+	return parseConfigYAML(data)
 }
 
-// parseConfigFile читает конфиг-файл. Сейчас поддерживается только дефолт
-// (расширение до YAML/TOML — в будущих слайсах).
-func parseConfigFile(path string) (Config, error) {
-	if _, err := os.Stat(path); err != nil {
-		return Config{}, fmt.Errorf("файл не найден: %s", path)
+func parseConfigYAML(data []byte) (Config, error) {
+	var raw configYAML
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return Config{}, fmt.Errorf("%w: %v", ErrConfigInvalid, err)
 	}
-	// TODO(S3+): парсинг YAML/TOML схемы конфига.
-	return Config{driftThresholdDays: 90, readabilityMin: 50}, nil
+	dt := raw.Thresholds.DriftDays
+	if dt == 0 {
+		dt = 90
+	}
+	rm := raw.Thresholds.ReadabilityMin
+	if rm == 0 {
+		rm = 50
+	}
+	return Config{
+		driftThresholdDays: dt,
+		readabilityMin:     rm,
+		llmPrompts:         raw.Prompts,
+		docs:               raw.Docs,
+		llmCallDelayMs:     raw.LLM.CallDelayMs,
+	}, nil
+}
+
+// ── LLMConfig ────────────────────────────────────────────────────────────────
+
+// LLMConfig — валидированная конфигурация LLM (неэкспортируемые поля).
+type LLMConfig struct {
+	provider string
+	baseURL  string
+	model    string
+	apiKey   string
+}
+
+func (c LLMConfig) Provider() string { return c.provider }
+func (c LLMConfig) BaseURL() string  { return c.baseURL }
+func (c LLMConfig) Model() string    { return c.model }
+func (c LLMConfig) APIKey() string   { return c.apiKey }
+
+// NewLLMConfig валидирует LLM-подключение и создаёт LLMConfig.
+// Антецедент: provider ∈ {anthropic,openai}; для openai base_url непустой;
+// ключ присутствует в env (ANTHROPIC_API_KEY | OPENAI_API_KEY).
+// Failure: ErrLLMUnavailable.
+func NewLLMConfig(req Request) (LLMConfig, error) {
+	provider := req.LLMProvider
+	if provider == "" {
+		provider = "anthropic"
+	}
+	if provider != "anthropic" && provider != "openai" {
+		return LLMConfig{}, fmt.Errorf("%w: провайдер %q неизвестен", ErrLLMUnavailable, provider)
+	}
+
+	baseURL := req.LLMBaseURL
+	if provider == "openai" && baseURL == "" {
+		return LLMConfig{}, fmt.Errorf("%w: openai требует --llm-base-url", ErrLLMUnavailable)
+	}
+	if provider == "anthropic" && baseURL == "" {
+		baseURL = "https://api.anthropic.com"
+	}
+
+	envVar := "ANTHROPIC_API_KEY"
+	if provider == "openai" {
+		envVar = "OPENAI_API_KEY"
+	}
+	key := os.Getenv(envVar)
+	if key == "" {
+		return LLMConfig{}, fmt.Errorf("%w: переменная %s не задана", ErrLLMUnavailable, envVar)
+	}
+
+	model := req.LLMModel
+	if model == "" {
+		if provider == "anthropic" {
+			model = "claude-sonnet-4-6"
+		} else {
+			model = "gpt-4o"
+		}
+	}
+
+	return LLMConfig{
+		provider: provider,
+		baseURL:  baseURL,
+		model:    model,
+		apiKey:   key,
+	}, nil
+}
+
+// ── JTBDPrompt / JTBDPromptSet / LLMVerdict ─────────────────────────────────
+
+// JTBDPrompt — промпт для одной JTBD-роли (неэкспортируемые поля).
+type JTBDPrompt struct {
+	consumer string
+	text     string
+	budget   int
+}
+
+func NewJTBDPrompt(consumer, text string, budget int) JTBDPrompt {
+	return JTBDPrompt{consumer: consumer, text: text, budget: budget}
+}
+
+func (p JTBDPrompt) Consumer() string { return p.consumer }
+func (p JTBDPrompt) Text() string     { return p.text }
+func (p JTBDPrompt) Budget() int      { return p.budget }
+
+// JTBDPromptSet — набор четырёх JTBDPrompt, один вход LLMClient.Ask.
+type JTBDPromptSet struct {
+	prompts []JTBDPrompt
+}
+
+func NewJTBDPromptSet(prompts []JTBDPrompt) JTBDPromptSet {
+	return JTBDPromptSet{prompts: prompts}
+}
+
+func (s JTBDPromptSet) Prompts() []JTBDPrompt { return s.prompts }
+
+// LLMVerdict — сырой провайдер-агностичный вердикт от LLMClient.Ask.
+type LLMVerdict struct {
+	Consumer  string
+	RawStatus string
+	RawScore  int
+	RawGaps   []string
 }
 
 // ── Данные (I/O-выход и промежуточные) ──────────────────────────────────────

@@ -69,3 +69,39 @@ func TestNewConfig_badConfig(t *testing.T) {
 		t.Fatalf("expected ErrConfigInvalid, got %v", err)
 	}
 }
+
+// ── NewLLMConfig ─────────────────────────────────────────────────────────────
+
+func TestNewLLMConfig_happy(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	req := domain.Request{LLMProvider: "openai", LLMBaseURL: "http://localhost:8080"}
+	cfg, err := domain.NewLLMConfig(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider() != "openai" {
+		t.Errorf("provider = %q, want openai", cfg.Provider())
+	}
+	if cfg.APIKey() != "test-key" {
+		t.Errorf("api key not set")
+	}
+}
+
+func TestNewLLMConfig_noKey(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	os.Unsetenv("ANTHROPIC_API_KEY")
+	req := domain.Request{LLMProvider: "anthropic"}
+	_, err := domain.NewLLMConfig(req)
+	if !errors.Is(err, domain.ErrLLMUnavailable) {
+		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
+	}
+}
+
+func TestNewLLMConfig_openaiNoBaseURL(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	req := domain.Request{LLMProvider: "openai", LLMBaseURL: ""}
+	_, err := domain.NewLLMConfig(req)
+	if !errors.Is(err, domain.ErrLLMUnavailable) {
+		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
+	}
+}
