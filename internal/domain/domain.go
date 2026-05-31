@@ -103,6 +103,8 @@ type configYAML struct {
 		APIKeyEnv   string `yaml:"api_key_env"`
 		BaseURL     string `yaml:"base_url"`
 		CallDelayMs int    `yaml:"call_delay_ms"`
+		TokenBudget int    `yaml:"token_budget"`
+		MaxRetries  int    `yaml:"max_retries"`
 	} `yaml:"llm"`
 	Docs       []string          `yaml:"docs"`
 	Prompts    map[string]string `yaml:"prompts"`
@@ -119,6 +121,8 @@ type Config struct {
 	llmPrompts         map[string]string
 	docs               []string
 	llmCallDelayMs     int
+	llmTokenBudget     int
+	llmMaxRetries      int
 }
 
 func (c Config) DriftThresholdDays() int { return c.driftThresholdDays }
@@ -130,6 +134,15 @@ func (c Config) Docs() []string { return c.docs }
 // LLMCallDelayMs возвращает задержку между последовательными LLM-вызовами (мс).
 // 0 = без задержки (дефолт для тестов). Для реального API рекомендуется 10000.
 func (c Config) LLMCallDelayMs() int { return c.llmCallDelayMs }
+
+// LLMTokenBudget возвращает защитный лимит токенов на один вызов (usage.total_tokens).
+// Предохранитель от аномалий — выше реального максимума целевых репо, не ниже
+// (skill http-io → «Бюджет payload»). Дефолт 300000.
+func (c Config) LLMTokenBudget() int { return c.llmTokenBudget }
+
+// LLMMaxRetries возвращает число повторов на transient-отказ (429) с бэкоффом
+// по Retry-After. 0 = без повтора (дефолт; см. skill http-io → «Пацинг»).
+func (c Config) LLMMaxRetries() int { return c.llmMaxRetries }
 
 // LLMPrompt возвращает промпт для роли (maintainer|consumer|manager|agent).
 func (c Config) LLMPrompt(role string) string {
@@ -166,12 +179,18 @@ func parseConfigYAML(data []byte) (Config, error) {
 	if rm == 0 {
 		rm = 50
 	}
+	tb := raw.LLM.TokenBudget
+	if tb == 0 {
+		tb = 300_000
+	}
 	return Config{
 		driftThresholdDays: dt,
 		readabilityMin:     rm,
 		llmPrompts:         raw.Prompts,
 		docs:               raw.Docs,
 		llmCallDelayMs:     raw.LLM.CallDelayMs,
+		llmTokenBudget:     tb,
+		llmMaxRetries:      raw.LLM.MaxRetries,
 	}, nil
 }
 

@@ -6,6 +6,7 @@
 /bin/
 /dist/
 *.exe
+/component-tests/llm-stub/llm-stub
 
 # Go
 vendor/

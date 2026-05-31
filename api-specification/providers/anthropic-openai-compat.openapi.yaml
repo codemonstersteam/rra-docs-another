@@ -1,0 +1,184 @@
+openapi: 3.1.0
+
+# Спека ПРОВАЙДЕРА (egress-контракт), не контракт тула. Описывает ровно тот
+# срез OpenAI-совместимого слоя Anthropic, который реально дёргает LLMClient
+# (internal/slice/fitness/io.go) — не весь API провайдера (дисциплина объёма,
+# см. skill http-io → «Спека провайдера»). Anthropic не публикует машинную спеку
+# на свой OpenAI-слой, поэтому она написана здесь на контракт, проверенный curl-ом
+# (devlog/01-llm-client-lessons.md). Источник истины для:
+#   • request/response-структур клиента (chatRequest/chatResponse);
+#   • стаба component-tests/llm-stub (обязан соответствовать этой спеке);
+#   • фикстур и валидации happy-ответа в компонентных тестах.
+
+info:
+  title: OpenAI-совместимый LLM-слой (Anthropic / openai-совм.)
+  version: "1.0"
+  description: |
+    Провайдер-агностичный egress-контракт L5 (`fitness`) и позднего L6c (`drift --semantic`).
+    Провайдер выбирается конфигом (`llm.provider`); base_url — `https://api.anthropic.com/v1`
+    для Anthropic либо `--llm-base-url` для любого openai-совместимого эндпоинта.
+    Секрет — из env по имени `llm.api_key_env`, в спеке/конфиге не хранится.
+
+servers:
+  - url: https://api.anthropic.com/v1
+    description: Anthropic OpenAI-совместимый слой (дефолт)
+  - url: "{base_url}"
+    description: Любой openai-совместимый эндпоинт (--llm-base-url)
+    variables:
+      base_url:
+        default: http://llm-stub:8080/v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /chat/completions:
+    post:
+      operationId: createChatCompletion
+      summary: Один JTBD-прогон (одна роль) — оценка документации
+      description: |
+        LLMClient.Ask делает N таких вызовов (4 JTBD-роли) с паузой/бэкоффом
+        между ними (skill http-io → «Бюджет нагрузки»). Тело несёт только
+        whitelisted-доки из `config.docs` (skill http-io → «Бюджет payload»).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChatRequest" }
+      responses:
+        "200":
+          description: Вердикт. content — строго JSON по json_schema (см. response_format).
+          headers:
+            anthropic-ratelimit-tokens-remaining:
+              description: Остаток токенов в текущем окне (адаптивный пацинг).
+              schema: { type: integer }
+            anthropic-ratelimit-tokens-reset:
+              description: Когда окно токенов сбросится (RFC3339).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChatResponse" }
+        "429":
+          description: |
+            Rate limit (TPM/RPM окна). Класс отказа transient → ErrLLMRateLimited.
+            Honor `Retry-After` для бэкоффа (skill http-io → «Пацинг»).
+          headers:
+            Retry-After:
+              description: Сколько секунд ждать до повтора.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+        "5XX":
+          description: Сбой/недоступность провайдера. transient → ErrLLMUnavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorBody" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer <key>`. Ключ — из env по имени `llm.api_key_env`
+        (ANTHROPIC_API_KEY | OPENAI_API_KEY), НЕ заголовок x-api-key нативного API.
+
+  schemas:
+    ChatRequest:
+      type: object
+      required: [model, messages, max_tokens]
+      additionalProperties: false
+      properties:
+        model:
+          type: string
+          example: claude-sonnet-4-6
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
+        max_tokens:
+          type: integer
+          description: Бюджет ответа (JTBDPrompt.Budget; для оценки docs хватает 4096).
+          example: 4096
+        response_format:
+          $ref: "#/components/schemas/ResponseFormat"
+
+    Message:
+      type: object
+      required: [role, content]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [system, user, assistant] }
+        content: { type: string }
+
+    ResponseFormat:
+      # Обязателен. Гарантирует чистый JSON. Anthropic поддерживает ТОЛЬКО
+      # json_schema (не json_object), требует strict:true и
+      # additionalProperties:false (devlog ошибка 6; skill llm-client).
+      type: object
+      required: [type, json_schema]
+      additionalProperties: false
+      properties:
+        type: { type: string, const: json_schema }
+        json_schema:
+          type: object
+          required: [name, strict, schema]
+          additionalProperties: false
+          properties:
+            name: { type: string, example: verdict }
+            strict: { type: boolean, const: true }
+            schema:
+              description: JSON-схема вердикта (см. Verdict).
+              type: object
+
+    ChatResponse:
+      type: object
+      required: [choices, usage]
+      properties:
+        choices:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [message]
+            properties:
+              message:
+                type: object
+                required: [content]
+                properties:
+                  # content — строка с JSON вердикта (Verdict). При провайдере без
+                  # response_format может прийти в ```json```-обёртке → extractJSON.
+                  content: { type: string }
+        usage:
+          type: object
+          required: [total_tokens]
+          properties:
+            total_tokens:
+              type: integer
+              description: |
+                Сверяется с защитным лимитом `llm.token_budget` (класс quota →
+                ErrLLMBudgetExceeded). Лимит — выше реального максимума целевых репо.
+
+    Verdict:
+      # Полезная нагрузка choices[0].message.content. Совпадает с json_schema в
+      # response_format и с режимами стаба llm-stub.
+      type: object
+      required: [status, score, gaps]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [PASS, FAIL, PARTIAL] }
+        score: { type: integer }
+        gaps:
+          type: array
+          items: { type: string }
+
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            type: { type: string, example: rate_limit_error }
+            message: { type: string }
