@@ -55,7 +55,16 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
   `gopkg.in/yaml.v3`. Секретов нет — `llm.api_key_env` указывает имя env-переменной,
   ключ из env. Загрузчик — общая инфраструктура в `internal/cli`. См. ADR 0003.
 - LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
-  эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001.
+  эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001. Резолвинг
+  `baseURL`/`model`/`provider` — только в `domain.NewLLMConfig` (флаг > YAML > вшитый
+  дефолт, anthropic → `/v1`); I/O-клиент берёт готовые значения, ничего не хардкодит.
+- **Spec-first egress.** Любой исходящий HTTP к дозируемому сервису (LLM, будущие
+  сервисы) проектируется по skill `http-io`: два бюджета (нагрузки/payload)
+  считаются ДО кода; контракт проверяется curl-ом и замораживается машинной спекой
+  в `api-specification/providers/<name>.openapi.yaml` (или AsyncAPI для стрима);
+  из спеки выводятся клиент, стаб и фикстуры; формулы бюджетов юнитятся, контрактные
+  ветки отказа — компонентом. LLM-специфика — skill `llm-client`. Дизайн-карта
+  слайса с HTTP-вызовом проходит чеклист дизайна `http-io` до кода.
 - CLI — stdlib (subcommand-switch в `internal/cli`), без cobra.
 - Компонентные тесты — всегда в Docker Compose (объект = спецификация программы:
   сервис или CLI-тул). Для тула: бинарь = сервис compose против фикстур, внешний

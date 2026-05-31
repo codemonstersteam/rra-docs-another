@@ -5,46 +5,48 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 )
 
-const tokenBudgetLimit = 300_000
+// Бэкофф по Retry-After: база/потолок паузы между повторами transient-отказа.
+const (
+	retryBackoffBase = 1 * time.Second
+	retryBackoffCap  = 30 * time.Second
+)
 
 // LLMClient — автономный I/O-объект для OpenAI-совместимого LLM-провайдера.
+// Все параметры подключения (baseURL, model, ключ) приходят из валидированного
+// domain.LLMConfig — клиент ничего не хардкодит и не резолвит сам (резолвинг —
+// в domain.NewLLMConfig, ADR 0003).
 type LLMClient struct {
-	provider    string
 	baseURL     string
 	model       string
+	apiKey      string
 	callDelayMs int
+	tokenBudget int
+	maxRetries  int
 	http        *http.Client
 }
 
-// NewLLMClient создаёт LLMClient с параметрами подключения.
+// NewLLMClient создаёт LLMClient из готового LLMConfig и операционных параметров.
+// llmCfg — валидированное подключение (baseURL уже с нужным префиксом, ключ из env).
 // callDelayMs — пауза между последовательными вызовами (0 = без паузы).
-// Ключ API читается из env при каждом вызове Simulate.
-func NewLLMClient(provider, baseURL, model string, callDelayMs int) LLMClient {
-	if provider == "" {
-		provider = "anthropic"
-	}
-	if model == "" {
-		if provider == "anthropic" {
-			model = "claude-sonnet-4-6"
-		} else {
-			model = "gpt-4o"
-		}
-	}
-	if provider == "anthropic" && baseURL == "" {
-		baseURL = "https://api.anthropic.com/v1"
+// tokenBudget — защитный лимит токенов на вызов (skill http-io); 0 → 300000.
+// maxRetries — повторы на 429 с бэкоффом по Retry-After (0 = без повтора).
+func NewLLMClient(llmCfg domain.LLMConfig, callDelayMs, tokenBudget, maxRetries int) LLMClient {
+	if tokenBudget <= 0 {
+		tokenBudget = 300_000
 	}
 	return LLMClient{
-		provider:    provider,
-		baseURL:     baseURL,
-		model:       model,
+		baseURL:     llmCfg.BaseURL(),
+		model:       llmCfg.Model(),
+		apiKey:      llmCfg.APIKey(),
 		callDelayMs: callDelayMs,
+		tokenBudget: tokenBudget,
+		maxRetries:  maxRetries,
 		http:        &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -53,13 +55,12 @@ func NewLLMClient(provider, baseURL, model string, callDelayMs int) LLMClient {
 // Маппит HTTP-ошибки провайдера в доменные: 429→ErrLLMRateLimited,
 // 5xx/сеть→ErrLLMUnavailable, превышение токенов→ErrLLMBudgetExceeded.
 func (c LLMClient) Ask(set domain.JTBDPromptSet) ([]domain.LLMVerdict, error) {
-	envVar := "ANTHROPIC_API_KEY"
-	if c.provider == "openai" {
-		envVar = "OPENAI_API_KEY"
-	}
-	key := os.Getenv(envVar)
-	if key == "" {
-		return nil, fmt.Errorf("%w: %s не задан", domain.ErrLLMUnavailable, envVar)
+	key := c.apiKey
+
+	// Пре-флайт payload-бюджета: не отправляем заведомо лишний контекст
+	// (skill http-io → «Бюджет payload»). Защита ДО сетевого вызова.
+	if est := promptSetTokens(set); overTokenBudget(est, c.tokenBudget) {
+		return nil, fmt.Errorf("%w: оценка входа %d > %d (до вызова)", domain.ErrLLMBudgetExceeded, est, c.tokenBudget)
 	}
 
 	verdicts := make([]domain.LLMVerdict, 0, len(set.Prompts()))
@@ -104,16 +105,29 @@ func (c LLMClient) call(p domain.JTBDPrompt, key string) (domain.LLMVerdict, err
 		return domain.LLMVerdict{}, fmt.Errorf("%w: marshal: %v", domain.ErrLLMUnavailable, err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(data))
-	if err != nil {
-		return domain.LLMVerdict{}, fmt.Errorf("%w: request: %v", domain.ErrLLMUnavailable, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+key)
+	// transient 429 → бэкофф по Retry-After и повтор (skill http-io → «Пацинг»).
+	// maxRetries=0 (дефолт) → поведение прежнее: первый 429 сразу даёт sentinel.
+	var resp *http.Response
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequest(http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(data))
+		if err != nil {
+			return domain.LLMVerdict{}, fmt.Errorf("%w: request: %v", domain.ErrLLMUnavailable, err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+key)
 
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return domain.LLMVerdict{}, fmt.Errorf("%w: %v", domain.ErrLLMUnavailable, err)
+		resp, err = c.http.Do(req)
+		if err != nil {
+			return domain.LLMVerdict{}, fmt.Errorf("%w: %v", domain.ErrLLMUnavailable, err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < c.maxRetries {
+			wait := retryWait(resp.Header.Get("Retry-After"), attempt, retryBackoffBase, retryBackoffCap)
+			resp.Body.Close()
+			time.Sleep(wait)
+			continue
+		}
+		break
 	}
 	defer resp.Body.Close()
 
@@ -131,8 +145,8 @@ func (c LLMClient) call(p domain.JTBDPrompt, key string) (domain.LLMVerdict, err
 		return domain.LLMVerdict{}, fmt.Errorf("%w: decode: %v", domain.ErrLLMUnavailable, err)
 	}
 
-	if chatResp.Usage.TotalTokens > tokenBudgetLimit {
-		return domain.LLMVerdict{}, fmt.Errorf("%w: usage %d > %d", domain.ErrLLMBudgetExceeded, chatResp.Usage.TotalTokens, tokenBudgetLimit)
+	if overTokenBudget(chatResp.Usage.TotalTokens, c.tokenBudget) {
+		return domain.LLMVerdict{}, fmt.Errorf("%w: usage %d > %d", domain.ErrLLMBudgetExceeded, chatResp.Usage.TotalTokens, c.tokenBudget)
 	}
 
 	if len(chatResp.Choices) == 0 {

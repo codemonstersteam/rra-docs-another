@@ -75,15 +75,60 @@ func TestNewConfig_badConfig(t *testing.T) {
 func TestNewLLMConfig_happy(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	req := domain.Request{LLMProvider: "openai", LLMBaseURL: "http://localhost:8080"}
-	cfg, err := domain.NewLLMConfig(req)
+	cfg, err := domain.NewLLMConfig(req, domain.Config{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.Provider() != "openai" {
 		t.Errorf("provider = %q, want openai", cfg.Provider())
 	}
+	if cfg.BaseURL() != "http://localhost:8080" {
+		t.Errorf("base url = %q, флаг должен победить", cfg.BaseURL())
+	}
 	if cfg.APIKey() != "test-key" {
 		t.Errorf("api key not set")
+	}
+}
+
+// TestNewLLMConfig_anthropicDefaultBaseURLV1 фиксирует: дефолт anthropic — с /v1
+// (а не голый домен). Эту нестыковку устраняли отдельно.
+func TestNewLLMConfig_anthropicDefaultBaseURLV1(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	cfg, err := domain.NewLLMConfig(domain.Request{LLMProvider: "anthropic"}, domain.Config{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BaseURL() != "https://api.anthropic.com/v1" {
+		t.Errorf("base url = %q, want https://api.anthropic.com/v1", cfg.BaseURL())
+	}
+}
+
+// TestNewLLMConfig_baseURLFromConfigLayer фиксирует приоритет YAML-конфига над
+// дефолтом (флаг > файл > дефолт): без флага base_url берётся из конфига.
+func TestNewLLMConfig_baseURLFromConfigLayer(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yaml := "llm:\n  provider: openai\n  base_url: http://cfg-host:9999/v1\n  model: cfg-model\n"
+	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	llmCfg, err := domain.NewLLMConfig(domain.Request{}, cfg) // без флагов
+	if err != nil {
+		t.Fatalf("NewLLMConfig: %v", err)
+	}
+	if llmCfg.Provider() != "openai" {
+		t.Errorf("provider = %q, want openai (из конфига)", llmCfg.Provider())
+	}
+	if llmCfg.BaseURL() != "http://cfg-host:9999/v1" {
+		t.Errorf("base url = %q, want из конфига", llmCfg.BaseURL())
+	}
+	if llmCfg.Model() != "cfg-model" {
+		t.Errorf("model = %q, want cfg-model (из конфига)", llmCfg.Model())
 	}
 }
 
@@ -91,7 +136,7 @@ func TestNewLLMConfig_noKey(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	os.Unsetenv("ANTHROPIC_API_KEY")
 	req := domain.Request{LLMProvider: "anthropic"}
-	_, err := domain.NewLLMConfig(req)
+	_, err := domain.NewLLMConfig(req, domain.Config{})
 	if !errors.Is(err, domain.ErrLLMUnavailable) {
 		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
 	}
@@ -100,7 +145,7 @@ func TestNewLLMConfig_noKey(t *testing.T) {
 func TestNewLLMConfig_openaiNoBaseURL(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	req := domain.Request{LLMProvider: "openai", LLMBaseURL: ""}
-	_, err := domain.NewLLMConfig(req)
+	_, err := domain.NewLLMConfig(req, domain.Config{})
 	if !errors.Is(err, domain.ErrLLMUnavailable) {
 		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
 	}

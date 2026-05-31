@@ -3,16 +3,12 @@ package fitness
 import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
 // ProcessFitness — голова слайса S5 (fitness, L5).
-// Пайп: NewAuditTarget → NewLLMConfig (fail-fast) → store.ReadMarkdownDocsByList →
-// buildJTBDPromptSet → llm.Ask → scoreFitness → buildReport.
+// Пайп: NewAuditTarget → store.ReadMarkdownDocsByList → buildJTBDPromptSet →
+// llm.Ask → scoreFitness → buildReport. Валидация LLM-подключения (fail-fast по
+// ключу/провайдеру) выполнена при сборке Deps в роутере (domain.NewLLMConfig).
 func ProcessFitness(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
-		return domain.Report{}, err
-	}
-
-	// Fail-fast: проверяем ключ до дорогого I/O.
-	if _, err := domain.NewLLMConfig(req); err != nil {
 		return domain.Report{}, err
 	}
 
