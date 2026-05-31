@@ -117,7 +117,14 @@ func runFitnessCmd(args []string, stdout, stderr io.Writer) int {
 		return egress(domain.Report{}, cfgErr, req, sink, stdout)
 	}
 
-	deps := fitness.NewDeps(req, cfg)
+	// Резолвим и валидируем LLM-подключение здесь (fail-fast по ключу/провайдеру
+	// до дорогого I/O); baseURL/model берутся из конфига, клиент их не хардкодит.
+	llmCfg, llmErr := domain.NewLLMConfig(req, cfg)
+	if llmErr != nil {
+		return egress(domain.Report{}, llmErr, req, sink, stdout)
+	}
+
+	deps := fitness.NewDeps(cfg, llmCfg)
 
 	report, runErr := fitness.ProcessFitness(req, deps)
 	return egress(report, runErr, req, sink, stdout)

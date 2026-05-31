@@ -13,11 +13,12 @@ type Deps struct {
 }
 
 // NewDeps собирает зависимости слайса fitness для CLI-роутера.
-// req содержит параметры LLM-подключения (provider, base-url, model).
-func NewDeps(req domain.Request, cfg domain.Config) Deps {
+// llmCfg — валидированное LLM-подключение (резолвинг baseURL/model/ключа — в
+// domain.NewLLMConfig); cfg — проектный конфиг (промпты, docs, операционные пороги).
+func NewDeps(cfg domain.Config, llmCfg domain.LLMConfig) Deps {
 	return Deps{
 		Store:  iodep.NewRepoStore(),
-		LLM:    NewLLMClient(req.LLMProvider, req.LLMBaseURL, req.LLMModel, cfg.LLMCallDelayMs(), cfg.LLMTokenBudget(), cfg.LLMMaxRetries()),
+		LLM:    NewLLMClient(llmCfg, cfg.LLMCallDelayMs(), cfg.LLMTokenBudget(), cfg.LLMMaxRetries()),
 		Config: cfg,
 	}
 }

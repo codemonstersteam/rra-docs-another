@@ -123,7 +123,17 @@ type Config struct {
 	llmCallDelayMs     int
 	llmTokenBudget     int
 	llmMaxRetries      int
+	llmProvider        string
+	llmBaseURL         string
+	llmModel           string
 }
+
+// LLMProvider/LLMBaseURL/LLMModel — слой YAML-конфига для LLM-подключения
+// («файл» в приоритете флаг > файл > вшитый дефолт, ADR 0003). Пусто = слой
+// не задан, резолвится во флаге или дефолте (см. NewLLMConfig).
+func (c Config) LLMProvider() string { return c.llmProvider }
+func (c Config) LLMBaseURL() string  { return c.llmBaseURL }
+func (c Config) LLMModel() string    { return c.llmModel }
 
 func (c Config) DriftThresholdDays() int { return c.driftThresholdDays }
 func (c Config) ReadabilityMin() int     { return c.readabilityMin }
@@ -191,6 +201,9 @@ func parseConfigYAML(data []byte) (Config, error) {
 		llmCallDelayMs:     raw.LLM.CallDelayMs,
 		llmTokenBudget:     tb,
 		llmMaxRetries:      raw.LLM.MaxRetries,
+		llmProvider:        raw.LLM.Provider,
+		llmBaseURL:         raw.LLM.BaseURL,
+		llmModel:           raw.LLM.Model,
 	}, nil
 }
 
@@ -209,25 +222,25 @@ func (c LLMConfig) BaseURL() string  { return c.baseURL }
 func (c LLMConfig) Model() string    { return c.model }
 func (c LLMConfig) APIKey() string   { return c.apiKey }
 
-// NewLLMConfig валидирует LLM-подключение и создаёт LLMConfig.
-// Антецедент: provider ∈ {anthropic,openai}; для openai base_url непустой;
-// ключ присутствует в env (ANTHROPIC_API_KEY | OPENAI_API_KEY).
+// NewLLMConfig валидирует LLM-подключение и создаёт LLMConfig — единственное
+// место резолвинга baseURL/model/provider (приоритет флаг > YAML-конфиг > вшитый
+// дефолт, ADR 0003). Клиент берёт готовые значения отсюда, ничего не хардкодит.
+// Антецедент: provider ∈ {anthropic,openai}; baseURL непустой (для anthropic —
+// дефолт https://api.anthropic.com/v1); ключ в env (ANTHROPIC_API_KEY | OPENAI_API_KEY).
 // Failure: ErrLLMUnavailable.
-func NewLLMConfig(req Request) (LLMConfig, error) {
-	provider := req.LLMProvider
-	if provider == "" {
-		provider = "anthropic"
-	}
+func NewLLMConfig(req Request, cfg Config) (LLMConfig, error) {
+	provider := firstNonEmpty(req.LLMProvider, cfg.LLMProvider(), "anthropic")
 	if provider != "anthropic" && provider != "openai" {
 		return LLMConfig{}, fmt.Errorf("%w: провайдер %q неизвестен", ErrLLMUnavailable, provider)
 	}
 
-	baseURL := req.LLMBaseURL
-	if provider == "openai" && baseURL == "" {
-		return LLMConfig{}, fmt.Errorf("%w: openai требует --llm-base-url", ErrLLMUnavailable)
-	}
-	if provider == "anthropic" && baseURL == "" {
-		baseURL = "https://api.anthropic.com"
+	baseURL := firstNonEmpty(req.LLMBaseURL, cfg.LLMBaseURL())
+	if baseURL == "" {
+		if provider == "anthropic" {
+			baseURL = "https://api.anthropic.com/v1"
+		} else {
+			return LLMConfig{}, fmt.Errorf("%w: openai требует base_url (--llm-base-url или llm.base_url)", ErrLLMUnavailable)
+		}
 	}
 
 	envVar := "ANTHROPIC_API_KEY"
@@ -239,7 +252,7 @@ func NewLLMConfig(req Request) (LLMConfig, error) {
 		return LLMConfig{}, fmt.Errorf("%w: переменная %s не задана", ErrLLMUnavailable, envVar)
 	}
 
-	model := req.LLMModel
+	model := firstNonEmpty(req.LLMModel, cfg.LLMModel())
 	if model == "" {
 		if provider == "anthropic" {
 			model = "claude-sonnet-4-6"
@@ -254,6 +267,16 @@ func NewLLMConfig(req Request) (LLMConfig, error) {
 		model:    model,
 		apiKey:   key,
 	}, nil
+}
+
+// firstNonEmpty возвращает первую непустую строку (резолвинг слоёв конфига).
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // ── JTBDPrompt / JTBDPromptSet / LLMVerdict ─────────────────────────────────
