@@ -62,17 +62,19 @@ Out of scope:
 | S2 | `readability` | `readability` | L1 | — | ✅ done (main) |
 | S3 | `jtbd-presence` | `jtbd` | L4 | — | ✅ done (main) |
 | S4 | `style` | `style` | L2 | (TBD) | 🧪 **TBD — дизайн отложен** |
-| **S5** | **`jtbd-fitness`** | **`fitness`** | **L5** | **LLMClient + YAML-конфиг** | **⬅️ NEXT — дизайн утверждён** |
-| S6 | `drift` | `drift` | L6a | — | ⏸ `@wip`, дизайн-карта есть |
+| S5 | `jtbd-fitness` | `fitness` | L5 | LLMClient + YAML-конфиг | ✅ done (main) |
+| **S6** | **`drift`** | **`drift`** | **L6a** | **—** | **⬅️ NEXT — дизайн утверждён** |
 | S7 | `assess` | `assess` | L1–L6 | — | ⏸ `@wip`, дизайн-карта есть |
-| S8 | `drift --semantic` | (флаг S6, поздний) | L6c | LLMClient | ⏸ поздний, дизайн-карта есть |
+| S8 | `drift --semantic` | (флаг S6) | L6c | LLMClient.Judge | ⏸ follow-up, дизайн утверждён |
 
 LLM появляется только в базовом S5 и опциональном позднем S8. S6 детерминированный
 (дрейф документации), работает на любой репе.
 
 ### Где мы сейчас
 
-Влиты S1–S3 (L3, L1, L4 — нулевые или уже заведённые интеграции).
+Влиты S1–S3 (L3, L1, L4) и **S5 `fitness`** (L5, LLM — `LLMClient.Ask`, YAML-конфиг,
+ADR 0003). Поверх S5 влита дисциплина исходящего HTTP-I/O (E11: skill `http-io`,
+спека провайдера, харденинг, резолвинг подключения без хардкода).
 
 **S4 `style` (L2) — отложен в TBD.** Дизайн слоя нуждается в отдельной, научно
 обоснованной проработке: спайк на реальном репо (`ubik/passkey-demo-api`) показал,
@@ -84,18 +86,24 @@ LLM появляется только в базовом S5 и опциональ
 S4 не стартует; `style.feature` остаётся `@wip`. (Карта-набросок —
 `docs/design/assess/slices/04-style.md`, считать устаревшей в части линтеров.)
 
-**Следующий шаг — S5 `fitness` (L5, LLM).** Дизайн утверждён с оператором:
-- новый I/O `LLMClient` (`Simulate(JTBDPromptSet) -> []LLMVerdict`, 4 прогона внутри);
-- **проектный конфиг во внешнем YAML** (`--config`, дефолт через `go:embed`) — выносим
-  `llm`-подключение и `prompts` четырёх ролей, чтобы дорабатывать без пересборки;
-  первая Go-зависимость `gopkg.in/yaml.v3`. См. `docs/adr/0003-yaml-config.md`;
-- секретов в YAML нет: `llm.api_key_env` = имя env-переменной, ключ из env;
-- загрузчик конфига — общая инфраструктура в `internal/cli` (I/O на краю);
-- компонент-харнесс уже готов (стаб + степы + `--llm-*` проброс), нужно снять `@wip`.
+**Следующий шаг — S6 `drift` (L6a, детерминированный, ноль новых I/O).** Дизайн
+утверждён с оператором (`docs/design/assess/slices/06-drift.md`):
+- голова `ProcessDrift` — **линейная труба без ветвления** (skill `program-design`);
+- `--semantic` (тир L6c, S8) — решение **на краю**: роутер выбирает реализацию
+  зависимости `Judge` (реальный `LLMClient` / `NoopJudge` null-object), голову не
+  ветвит; `drift` без флага ключа не требует;
+- слияние L6a+L6c-находок — узел-конструктор `NewDriftReport` (вместо `if`);
+- claim-kinds v1: `link`/path (против `Files`) + `dependency` (против `Manifests`);
+  `env`/`subcommand` отложены (нужен новый I/O на чтение контента кода);
+- реализация Sonnet'ом, L6a первым; L6a-сценарии снимаются с `@wip`.
 
-Затем S7 `assess` (сборка пайплайна, short-circuit «L4 упал → не звать LLM»,
-четыре независимых score). S6 `drift` (детерминированный L6a) — параллельно/после.
-S8 (`drift --semantic`, L6c) — поздний.
+Затем **chore-PR**: промоут `LLMClient` (`fitness/io.go` → `internal/io`, + метод
+`Judge`, + общие формулы-бюджеты), после — **L6c за флагом** (S8,
+`08-drift-semantic.md`, по skill `http-io`: пара на вызов, cap `max_judge_calls`,
+пейсинг/бэкофф, спека провайдера + стаб-режим `judge`).
+
+Затем S7 `assess` (сборка пайплайна из листьев S1–S6, short-circuit «L4 упал → не
+звать LLM», четыре независимых score).
 
 ## E10. Эталонные фикстуры
 
