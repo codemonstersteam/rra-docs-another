@@ -98,13 +98,14 @@ func headCommit(root string) string {
 // configYAML — структура YAML-конфига для парсинга.
 type configYAML struct {
 	LLM struct {
-		Provider    string `yaml:"provider"`
-		Model       string `yaml:"model"`
-		APIKeyEnv   string `yaml:"api_key_env"`
-		BaseURL     string `yaml:"base_url"`
-		CallDelayMs int    `yaml:"call_delay_ms"`
-		TokenBudget int    `yaml:"token_budget"`
-		MaxRetries  int    `yaml:"max_retries"`
+		Provider      string `yaml:"provider"`
+		Model         string `yaml:"model"`
+		APIKeyEnv     string `yaml:"api_key_env"`
+		BaseURL       string `yaml:"base_url"`
+		CallDelayMs   int    `yaml:"call_delay_ms"`
+		TokenBudget   int    `yaml:"token_budget"`
+		MaxRetries    int    `yaml:"max_retries"`
+		MaxJudgeCalls int    `yaml:"max_judge_calls"`
 	} `yaml:"llm"`
 	Docs       []string          `yaml:"docs"`
 	Prompts    map[string]string `yaml:"prompts"`
@@ -126,6 +127,7 @@ type Config struct {
 	llmProvider        string
 	llmBaseURL         string
 	llmModel           string
+	maxJudgeCalls      int
 }
 
 // LLMProvider/LLMBaseURL/LLMModel — слой YAML-конфига для LLM-подключения
@@ -153,6 +155,10 @@ func (c Config) LLMTokenBudget() int { return c.llmTokenBudget }
 // LLMMaxRetries возвращает число повторов на transient-отказ (429) с бэкоффом
 // по Retry-After. 0 = без повтора (дефолт; см. skill http-io → «Пацинг»).
 func (c Config) LLMMaxRetries() int { return c.llmMaxRetries }
+
+// MaxJudgeCalls возвращает максимальное число вызовов Judge на один запуск (L6c).
+// Ограничивает нагрузку на LLM при наличии флага --semantic.
+func (c Config) MaxJudgeCalls() int { return c.maxJudgeCalls }
 
 // LLMPrompt возвращает промпт для роли (maintainer|consumer|manager|agent).
 func (c Config) LLMPrompt(role string) string {
@@ -193,6 +199,10 @@ func parseConfigYAML(data []byte) (Config, error) {
 	if tb == 0 {
 		tb = 300_000
 	}
+	mjc := raw.LLM.MaxJudgeCalls
+	if mjc == 0 {
+		mjc = 20
+	}
 	return Config{
 		driftThresholdDays: dt,
 		readabilityMin:     rm,
@@ -204,6 +214,7 @@ func parseConfigYAML(data []byte) (Config, error) {
 		llmProvider:        raw.LLM.Provider,
 		llmBaseURL:         raw.LLM.BaseURL,
 		llmModel:           raw.LLM.Model,
+		maxJudgeCalls:      mjc,
 	}, nil
 }
 
@@ -375,6 +386,33 @@ type JTBDResult struct {
 	Status string   `json:"status"`
 	Score  int      `json:"score"`
 	Gaps   []string `json:"gaps"`
+}
+
+// ── L6c — семантический судья ────────────────────────────────────────────────
+
+// ClaimPrompt — одна пара (сниппет доки + сниппет кода) для семантического судьи.
+type ClaimPrompt struct {
+	DocSnippet  string
+	CodeSnippet string
+}
+
+// ClaimPromptSet — набор пар для Judge.Judge (S6/S8).
+type ClaimPromptSet struct {
+	prompts []ClaimPrompt
+}
+
+// NewClaimPromptSet создаёт ClaimPromptSet из среза промптов.
+func NewClaimPromptSet(prompts []ClaimPrompt) ClaimPromptSet {
+	return ClaimPromptSet{prompts: prompts}
+}
+
+func (s ClaimPromptSet) Prompts() []ClaimPrompt { return s.prompts }
+func (s ClaimPromptSet) IsEmpty() bool          { return len(s.prompts) == 0 }
+
+// Verdict — вердикт судьи по одной паре (S6/S8).
+type Verdict struct {
+	OK    bool
+	Quote string
 }
 
 // ── Отчёт ────────────────────────────────────────────────────────────────────

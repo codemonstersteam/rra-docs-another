@@ -97,11 +97,39 @@
 2, `scoreFitness` 2); локальный CI (`vet`/`test`/`gofmt`) зелёный; PR смержен.
 
 ### TICKET S6 — slice drift: CLI `drift <path>`
-- Спека: `slices/06-drift.md`. Зависимости: S1.
-- Ветка `feat/slice-drift`.
-- DoD: `extractClaims`/`NewDriftCheck`/`verifyClaims`/`buildDriftOutcome`; дрейф
-  заявляется только при механическом подтверждении; `@wip` снят с `drift.feature`;
-  зелёные.
+
+**Спецификация:**
+- `docs/design/assess/slices/06-drift.md` (главный документ)
+- `docs/design/assess/messages.md` — `Claim`, `DriftFinding`, `DriftCheck`
+- `docs/design/assess/contracts-graph.md` — секция «S6 drift»
+- `docs/design/assess/infrastructure.md` — конвенция слайса, подключение в `internal/cli/cli.go`
+
+**Зависимости:** S1 (в main) — `RepoStore`, `ReportSink`, `NewAuditTarget`, `NewConfig`, `buildReport`, egress.
+Новых внешних Go-зависимостей нет.
+
+**Ветка:** `feat/slice-drift`
+
+**Definition of Done:**
+
+- [x] `internal/slice/drift/domain.go`: типы `Claim{Kind,Text,File,Line}`, `DriftFinding{Claim,Reason}`, `DriftCheck`; конструктор `NewDriftCheck(structure,claims) -> DriftCheck`
+- [x] `internal/slice/drift/logic.go`: `extractClaims`, `verifyClaims`, `buildClaimPromptSet`, `mergeSemanticFindings`, `NewDriftReport`, `buildDriftOutcome` — чистые функции, без I/O
+- [x] `internal/io/judge.go`: интерфейс `Judge` + `NoopJudge{}` (null-object: `([], nil)`)
+- [x] `internal/slice/drift/adapter.go`: `ParseArgs(args,stderr) -> (Request, error)` — парсит позиционный `[path]` и флаг `--semantic`
+- [x] `internal/slice/drift/head.go`: `ProcessDrift(req, Deps) -> (Report, error)` — линейная труба по псевдокоду карточки, без ветвления
+- [x] `internal/slice/drift/register.go`: `Deps{Store, Judge}` + `NewDeps(cfg, judge) -> Deps`
+- [x] `internal/cli/cli.go`: `runDriftCmd` добавлен, `"drift"` убран из `subcommandsTodo`; `judge` инжектируется как `NoopJudge` (флаг `--semantic` → роутер без головы)
+- [x] юнит-тесты по формуле написаны и зелёные — `go test ./...` проходит. **15 новых тестов**: `extractClaims`(2) + `NewDriftCheck`(1) + `verifyClaims`(3) + `buildClaimPromptSet`(3) + `mergeSemanticFindings`(3) + `NewDriftReport`(1) + `buildDriftOutcome`(2). Голова, адаптер, `NoopJudge` юнитами не покрываются.
+- [x] компонентные тесты зелёные — `./component-tests/scripts/run-tests.sh healthy`. `@wip` снят с `drift.feature`; все три сценария зелёные: «опрятный репо → pass», «битая ссылка → fail», «путь не существует → path_not_found». Ранее зелёные сценарии S1–S5 продолжают проходить.
+- [x] `backlog.md` обновлён по каждому подтверждённому пункту
+- [x] `docs/design/assess/devlog.md` дополнен блоком S6
+- [ ] PR создан, описание заполнено по шаблону Шага 8 скилла
+- [ ] PR смержен в main, CI на main зелёный
+
+**Ссылки на источники:**
+- Скилл реализации: `skills/program-implementation/SKILL.md`
+- Граф вызовов: `docs/design/assess/contracts-graph.md` S6
+- Gherkin-mapping: раздел `## Gherkin-mapping` в `slices/06-drift.md`
+- Принцип голова без ветвления: `slices/06-drift.md` §«Принцип: голова без ветвления»
 
 ### TICKET S7 — slice assess: CLI `assess <path>`
 - Спека: `slices/07-assess.md`. Зависимости: **S1–S6 в main** (переиспользует листья).
