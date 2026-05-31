@@ -19,27 +19,28 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
 | Проектный пакет (E2) | done (дизайн-PR влит = аппрув) |
-| Реализация слайсов S1–S7 (E3–E9) | in progress (S1–S3 в main) |
+| Реализация слайсов S1–S7 (E3–E9) | in progress (S1–S3, S5 в main) |
 
 ## Следующий шаг
 
 **S4 `style` (L2) отложен в TBD** — внешние тулзы (Vale/markdownlint) не тянем,
 состав L2 проектируем отдельно и научно (см. `backlog.md` → «Где мы сейчас»).
 
-Следующий — **S5 `fitness`** (L5, LLM) по `docs/design/assess/slices/05-fitness.md`,
-ветка `feat/slice-fitness`. Дизайн утверждён с оператором: новый I/O `LLMClient`
-(`Ask(JTBDPromptSet) -> []LLMVerdict`); **проектный конфиг во внешнем YAML**
-(`--config`, дефолт `go:embed`) — выносим `llm`-подключение и `prompts` ролей,
-первая Go-зависимость `gopkg.in/yaml.v3` (ADR 0003); секретов в YAML нет
-(`llm.api_key_env` = имя env-переменной). Загрузчик конфига — общая инфраструктура
-в `internal/cli`. Компонент-харнесс готов — снять `@wip` с `fitness.feature`.
-Реализация Sonnet'ом, голову `runFitness` уже сверили. Затем S7 `assess`, S6 `drift`.
+Следующий — **S6 `drift`** (L6a, детерминированный, ноль новых I/O) по утверждённой
+карте `docs/design/assess/slices/06-drift.md`. Дизайн сверен с оператором: голова
+`ProcessDrift` — **линейная труба без ветвления**; `--semantic` (тир L6c, S8) решается
+на краю (роутер выбирает реализацию `Judge`: реальный `LLMClient` / `NoopJudge`),
+не ветвит голову; слияние L6a+L6c-находок — узел-конструктор `NewDriftReport`.
+claim-kinds v1: `link`/path (против `Files`) + `dependency` (против `Manifests`);
+`env`/`subcommand` отложены (нужен новый I/O). Реализация Sonnet'ом, L6a первым.
+Затем chore-PR: промоут `LLMClient` `fitness/io.go` → `internal/io` (+ `Judge`),
+после — L6c за флагом (`08-drift-semantic.md`, по skill `http-io`). Далее S7 `assess`.
 
 Конвенция слайса (как в `ubik/passkey-demo-api`, см. `infrastructure.md`):
 самодостаточный пакет `internal/slice/<name>/` — `head.go` (`Process<Slice>` —
 голова), `adapter.go` (парсинг), `logic.go`, `register.go` (`Deps`+`NewDeps`).
-Общие `internal/{domain,io,cli}` (egress в `cli`). Образцы — S1–S3 в main.
-Дальше S5 `fitness` (LLM) → S6 `drift` → S7 `assess`. S8 (`drift --semantic`) — поздний.
+Общие `internal/{domain,io,cli}` (egress в `cli`). Образцы — S1–S3, S5 в main.
+Дальше S6 `drift` (L6a) → S7 `assess`. S8 (`drift --semantic`, L6c) — follow-up за флагом.
 
 ## Принятые решения
 

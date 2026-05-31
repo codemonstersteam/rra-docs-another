@@ -117,6 +117,10 @@
   проверяемое утверждение (`link`\|`command`\|`dependency`\|`env`\|`subcommand`).
 - `DriftFinding` `{Claim Claim, Reason string}` — утверждение, не подтверждённое
   репозиторием. Конвертируется в `Violation{layer:"L6", severity, file, line}`.
+- `DriftReport` — бандл двух источников находок (L6a-механика + L6c-семантика);
+  конструктор `NewDriftReport(l6a []DriftFinding, semantic []DriftFinding) ->
+  DriftReport` (узел-склейка, один data-вход `buildDriftOutcome`). Так в голове
+  `ProcessDrift` нет ветвления `if --semantic` (skill `program-design`).
 
 ### Сборочные и I/O-выходные типы
 
@@ -132,8 +136,16 @@
   DriftCheck` (узел-сборка по Шагу 3, чтобы `verifyClaims` имел один data-аргумент).
 - `ReportParts` `{Layers []LayerOutcome, JTBD []JTBDResult}` — сборочный DTO,
   один вход общего `buildReport(parts) [dep: target, command] -> Report`.
-- `ClaimPrompt` / `Verdict` (S8) — вход/выход `LLMClient.Judge`: предъявленная
-  пара (сниппет доки + кусок кода) → `Verdict{OK bool, Quote string}`.
+- `ClaimPrompt` `{claim Claim, docSnippet string, codeChunk string}` (S8) —
+  предъявленная пара (сниппет доки + кусок кода) на суд LLM.
+- `ClaimPromptSet` `{prompts []ClaimPrompt}` (S8) — набор пар; конструктор
+  `buildClaimPromptSet(check) [dep: Config] -> ClaimPromptSet` (отбор по `Kind`,
+  cap `max_judge_calls`). Один вход `LLMClient.Judge` (пейсинг — внутри объекта).
+- `Verdict` `{OK bool, Quote string}` (S8) — выход `LLMClient.Judge` на одну пару;
+  `OK=false` → `DriftFinding` через чистую `mergeSemanticFindings`.
+- `Judge` — интерфейс I/O `{ Judge(ClaimPromptSet) -> Result<[]Verdict, Error> }`;
+  реализации `LLMClient` (реальная) и `NoopJudge` (null-object, тир выключен).
+  `--semantic` выбирает реализацию в роутере, не ветвит голову.
 
 ## Отчёт и провалы
 

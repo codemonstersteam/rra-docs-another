@@ -8,10 +8,11 @@
 
 Пройден `messages.md`: у каждого поля объявлен тип; вложенные структуры
 (`Heading`, `LayerResult`, `LayerOutcome`, `JTBDResult`, `Violation`, `Error`,
-`Claim`, `DriftFinding`, `StyleFindings`, `JTBDPromptSet`, `LLMVerdict`,
-`DriftCheck`, `ReportParts`) описаны; валидируемые типы (`AuditTarget`, `Config`,
-`LLMConfig`, `JTBDPrompt`, `DriftCheck`) имеют конструктор. `TODO: уточнить тип`
-нет. **[x] замкнут.**
+`Claim`, `DriftFinding`, `DriftReport`, `StyleFindings`, `JTBDPromptSet`,
+`LLMVerdict`, `DriftCheck`, `ClaimPrompt`, `ClaimPromptSet`, `Verdict`,
+`ReportParts`) описаны; валидируемые/сборочные типы (`AuditTarget`, `Config`,
+`LLMConfig`, `JTBDPrompt`, `DriftCheck`, `DriftReport`, `ClaimPromptSet`) имеют
+конструктор. `TODO: уточнить тип` нет. **[x] замкнут.**
 
 ## 9.2. Графы вызовов слайсов
 
@@ -56,15 +57,21 @@ parseStructureArgs --Request--> runStructure
   | scoreFitness([]LLMVerdict) -> []JTBDResult
   | buildReport -> Report
 ```
-### S6 drift
+### S6 drift (L6a + L6c-тир за флагом, без ветвления в голове)
 ```
   | store.ReadStructure -> RepoStructure
   | extractClaims(RepoStructure) -> []Claim
   | NewDriftCheck(RepoStructure,[]Claim) -> DriftCheck
-  | verifyClaims(DriftCheck) -> []DriftFinding
-  | buildDriftOutcome([]DriftFinding) -> LayerOutcome
+  | verifyClaims(DriftCheck) -> []DriftFinding                      (L6a)
+  | buildClaimPromptSet(DriftCheck)[Config] -> ClaimPromptSet       (L6c-пары, cap)
+  | deps.Judge.Judge(ClaimPromptSet) -> []Verdict   [I/O]          # LLMClient | NoopJudge
+  | mergeSemanticFindings([]Verdict) -> []DriftFinding             (L6c)
+  | NewDriftReport([]DriftFinding L6a, []DriftFinding L6c) -> DriftReport
+  | buildDriftOutcome(DriftReport) -> LayerOutcome
   | buildReport -> Report
 ```
+`--semantic` выбирает реализацию `Judge` (реальная `LLMClient` / `NoopJudge`) в
+роутере — голова безусловна (skill `program-design`: нет if/циклов в трубе).
 ### S7 assess
 ```
   | layersUpTo(Request) -> LayerPlan
@@ -91,8 +98,10 @@ parseStructureArgs --Request--> runStructure
    маппингу egress (таблицы `## Gherkin-mapping` в карточках). Узлов без Then нет;
    Then без узла нет.
 6. **Один data-аргумент на узел:** проверено. Места слияния разнесены конструкторами:
-   `NewDriftCheck` (S6), `JTBDPromptSet`/`ReportParts` (сборочные DTO). Сырых
-   `*sql.DB`/`*http.Client`/`*exec.Cmd` в `Dependencies:`/`Deps` нет.
+   `NewDriftCheck` + `NewDriftReport` (S6, второй склеивает L6a+L6c-находки вместо
+   ветки `if --semantic`), `JTBDPromptSet`/`ClaimPromptSet`/`ReportParts` (сборочные
+   DTO). Сырых `*sql.DB`/`*http.Client`/`*exec.Cmd` в `Dependencies:`/`Deps` нет.
+   Зависимость `Judge` — интерфейс (реальная/null-object), решение `--semantic` на краю.
 
 ## 9.4. Отметки
 
