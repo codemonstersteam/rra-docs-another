@@ -9,6 +9,7 @@ import (
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 	iodep "github.com/codemonstersteam/rra-docs-another/internal/io"
+	"github.com/codemonstersteam/rra-docs-another/internal/slice/drift"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/fitness"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/jtbd"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/readability"
@@ -19,9 +20,9 @@ import (
 // go build -ldflags "-X github.com/codemonstersteam/rra-docs-another/internal/cli.Version=v1.2.3".
 var Version = "0.0.0-dev"
 
-// subcommandsTodo — подкоманды, ещё не реализованные (S4, S6–S7).
+// subcommandsTodo — подкоманды, ещё не реализованные (S4, S7).
 var subcommandsTodo = []string{
-	"style", "drift", "assess",
+	"style", "assess",
 }
 
 // Run диспетчеризует args (обычно os.Args[1:]) и возвращает код возврата
@@ -46,6 +47,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runJTBDCmd(args[1:], stdout, stderr)
 	case "fitness":
 		return runFitnessCmd(args[1:], stdout, stderr)
+	case "drift":
+		return runDriftCmd(args[1:], stdout, stderr)
 	default:
 		if isTodoSubcommand(cmd) {
 			fmt.Fprintf(stderr, "rra-docs-another: подкоманда %q ещё не реализована (см. PLAN.md)\n", cmd)
@@ -130,6 +133,36 @@ func runFitnessCmd(args []string, stdout, stderr io.Writer) int {
 	return egress(report, runErr, req, sink, stdout)
 }
 
+// runDriftCmd — точка входа подкоманды drift в CLI-роутере.
+// Решение --semantic (выбор Judge) принимается здесь, не в голове слайса.
+func runDriftCmd(args []string, stdout, stderr io.Writer) int {
+	req, err := drift.ParseArgs(args, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "rra-docs-another drift: %v\n", err)
+		return 2
+	}
+
+	sink := iodep.NewReportSink()
+
+	// judge по умолчанию — NoopJudge (L6c выключен, ключ не нужен).
+	var judge iodep.Judge = iodep.NoopJudge{}
+	if req.Semantic {
+		cfg, cfgErr := domain.NewConfig(req)
+		if cfgErr != nil {
+			return egress(domain.Report{}, cfgErr, req, sink, stdout)
+		}
+		llmCfg, llmErr := domain.NewLLMConfig(req, cfg)
+		if llmErr != nil {
+			return egress(domain.Report{}, llmErr, req, sink, stdout)
+		}
+		_ = llmCfg // LLMClient.Judge подключается в S8
+	}
+
+	deps := drift.NewDeps(judge)
+	report, runErr := drift.ProcessDrift(req, deps)
+	return egress(report, runErr, req, sink, stdout)
+}
+
 // egress — общий выход: форматирует отчёт (успех или ошибку) и возвращает код.
 func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink, stdout io.Writer) int {
 	if err != nil {
@@ -165,6 +198,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  readability  L1 читаемость")
 	fmt.Fprintln(w, "  jtbd         L4 JTBD-присутствие")
 	fmt.Fprintln(w, "  fitness      L5 JTBD-пригодность (LLM)")
+	fmt.Fprintln(w, "  drift        L6 дрейф документации")
 	for _, c := range subcommandsTodo {
 		fmt.Fprintf(w, "  %-12s аудит (todo)\n", c)
 	}

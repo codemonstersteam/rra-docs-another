@@ -773,36 +773,114 @@ docs/design/<slug>/
 
 Один тикет = один slice.
 
+**Жёсткое правило: шаблон ниже — каркас, а не финальный текст.** Каждый
+обобщённый пункт DoD должен быть заменён конкретикой из уже выполненных шагов.
+Плейсхолдеры в готовом тикете — признак, что Шаг 11 не завершён.
+
+Таблица подстановок:
+
+| Пункт DoD (шаблон) | Откуда брать конкретику |
+|---|---|
+| «ингресс-адаптер реализован» | Указать имя функции и файл из `infrastructure.md` (Шаг 7) |
+| «конструкторы … реализованы» | Перечислить конкретные `NewT` из карточки слайса (Шаг 3/5) |
+| «модули логики реализованы» | Перечислить конкретные функции из карточки слайса (Шаг 3) |
+| «модуль I/O изолирует…» | Указать имя I/O-объекта и его методы (Шаг 6) |
+| «головной модуль реализован» | Указать имя `Process<Slice>` и файл `head.go` (Шаг 3) |
+| «slice подключён» | Указать конкретный файл и точку входа из `infrastructure.md` (Шаг 7) |
+| «юнит-тесты по формуле» | Вставить итоговое число из таблицы Шага 8.1 с разбивкой по модулям |
+| «компонентный тест зелёный» | Назвать конкретные сценарии из `.feature` (Шаг 8.3/8.4) и команду запуска |
+
 Шаблон тикета:
 
 ```
-TICKET S<n> — slice <name>: <идентификатор входа>
+### TICKET S<n> — slice <name>: <идентификатор входа>
 
-(<идентификатор входа> — например `HTTP POST /v1/registrations`,
- `Broker registrations.created`, `gRPC RegistrationService.Create`,
- `CLI registrations:cleanup`)
+**Спецификация:**
+- `docs/design/<slug>/slices/<n>-<name>.md` (главный документ)
+- `docs/design/<slug>/messages.md` — <перечислить типы, специфичные слайсу>
+- `docs/design/<slug>/contracts-graph.md` — секция «S<n> <name>»
+- `docs/design/<slug>/infrastructure.md` — <что именно: подключение, миграции, Deps>
 
-Спецификация:
-  docs/design/<slug>/slices/<n>-<name>.md
+**Зависимости:** <S<m>, S<k> — что именно импортируется (типы, I/O-объекты)>.
+Новых внешних Go-зависимостей нет. (или: новые go.mod записи: <список>)
 
-Зависимости (предыдущие тикеты, должны быть в main):
-  - S<m>, S<k>
+**Ветка:** `feat/slice-<name>`
 
-Ветка: feat/slice-<name>
+**Definition of Done:**
 
-Definition of Done:
-  - [ ] ингресс-адаптер реализован: парсит внешний вход в Request, без бизнес-валидации (для HTTP — JSON+headers, для Broker — payload+properties, для gRPC — proto-сообщение, для CLI — args)
-  - [ ] конструкторы доменных структур реализованы: проверяют антецедент, при невалидных данных возвращают ошибку (структура не создаётся)
-  - [ ] модули логики реализованы, контракты выполнены
-  - [ ] модуль I/O изолирует все внешние вызовы
-  - [ ] головной модуль slice'а реализован: оркестрирует пайп, разбирает ошибки конструкторов и I/O
-  - [ ] slice подключён к своему типу входа в инфраструктурном модуле (роут / подписка / handler / расписание)
-  - [ ] юнит-тесты по формуле, покрытие 100% по строкам и веткам логики
-  - [ ] компонентный тест Gherkin зелёный для happy path (через реальный вход slice'а)
-  - [ ] компонентные тесты режимов отказа зелёные
-  - [ ] локальный CI зелёный
-  - [ ] PR создан, описание заполнено по шаблону
-  - [ ] PR смержен в main, CI на main зелёный
+- [ ] `<файл>/domain.go`: <конкретные типы и конструкторы из Шага 3>
+- [ ] `<файл>/logic.go`: <конкретные функции из Шага 3> — чистые функции, без I/O
+- [ ] `<файл>/adapter.go`: `ParseArgs(args,stderr) -> (Request, error)` — <что парсит>
+- [ ] `<файл>/head.go`: `Process<Slice>(req, Deps) -> (Report, error)` — линейная труба
+- [ ] `<файл>/register.go`: `Deps{<поля>}` + `NewDeps(<аргументы>) -> Deps`
+- [ ] `<точка входа>`: <имя функции> добавлен, `"<name>"` убран из заглушек
+- [ ] юнит-тесты по формуле написаны и зелёные — `go test ./...` проходит.
+  **<N> новых тестов**: <Модуль1>(<n1>) + <Модуль2>(<n2>) + … (из таблицы Шага 8.1).
+  <Голова, адаптер, I/O-объекты> юнитами не покрываются.
+- [ ] компонентные тесты зелёные — `<команда запуска>`.
+  `@wip` снят с `<name>.feature`; сценарии: «<название1>», «<название2>», … (из Шага 8.3).
+  Ранее зелёные сценарии S1–S<m> продолжают проходить.
+- [ ] `backlog.md` обновлён по каждому подтверждённому пункту
+- [ ] `docs/design/<slug>/devlog.md` дополнен блоком S<n>
+- [ ] PR создан, описание заполнено по шаблону Шага 8 скилла
+- [ ] PR смержен в main, CI на main зелёный
+
+**Ссылки на источники:**
+- Скилл реализации: `skills/program-implementation/SKILL.md`
+- Граф вызовов: `docs/design/<slug>/contracts-graph.md` — секция «S<n>»
+- Gherkin-mapping: раздел `## Gherkin-mapping` в `slices/<n>-<name>.md`
+- <применённые принципы — «голова без ветвления», «подтип, не guard» и т.п.>
+```
+
+#### Пример готового тикета
+
+Эталон — тикет S6 `drift` из `rra-docs-another` (CLI-тул, L6a без I/O):
+
+```
+### TICKET S6 — slice drift: CLI `drift <path>`
+
+**Спецификация:**
+- `docs/design/assess/slices/06-drift.md` (главный документ)
+- `docs/design/assess/messages.md` — `Claim`, `DriftFinding`, `DriftCheck`
+- `docs/design/assess/contracts-graph.md` — секция «S6 drift»
+- `docs/design/assess/infrastructure.md` — подключение в `internal/cli/cli.go`
+
+**Зависимости:** S1 (в main) — `RepoStore`, `ReportSink`, `NewAuditTarget`,
+`NewConfig`, `buildReport`, egress. Новых внешних Go-зависимостей нет.
+
+**Ветка:** `feat/slice-drift`
+
+**Definition of Done:**
+
+- [ ] `internal/slice/drift/domain.go`: типы `Claim{Kind,Text,File,Line}`,
+  `DriftFinding{Claim,Reason}`, `DriftCheck`; конструктор
+  `NewDriftCheck(structure,claims) -> DriftCheck`
+- [ ] `internal/slice/drift/logic.go`: `extractClaims`, `verifyClaims`,
+  `buildClaimPromptSet`, `mergeSemanticFindings`, `NewDriftReport`,
+  `buildDriftOutcome` — чистые функции, без I/O
+- [ ] `internal/io/judge.go`: интерфейс `Judge` + `NoopJudge{}` (null-object)
+- [ ] `internal/slice/drift/adapter.go`: `ParseArgs(args,stderr) -> (Request, error)`
+- [ ] `internal/slice/drift/head.go`: `ProcessDrift(req, Deps) -> (Report, error)`
+- [ ] `internal/slice/drift/register.go`: `Deps{Store, Judge}` + `NewDeps`
+- [ ] `internal/cli/cli.go`: `runDriftCmd` добавлен, `"drift"` убран из `subcommandsTodo`
+- [ ] юнит-тесты по формуле написаны и зелёные — `go test ./...` проходит.
+  **15 новых тестов**: `extractClaims`(2) + `NewDriftCheck`(1) + `verifyClaims`(3)
+  + `buildClaimPromptSet`(3) + `mergeSemanticFindings`(3) + `NewDriftReport`(1)
+  + `buildDriftOutcome`(2). Голова, адаптер, `NoopJudge` юнитами не покрываются.
+- [ ] компонентные тесты зелёные — `./component-tests/scripts/run-tests.sh healthy`.
+  `@wip` снят с `drift.feature`; сценарии: «опрятный репо → pass»,
+  «битая ссылка → fail», «путь не существует → path_not_found».
+  Ранее зелёные сценарии S1–S5 продолжают проходить.
+- [ ] `backlog.md` обновлён по каждому подтверждённому пункту
+- [ ] `docs/design/assess/devlog.md` дополнен блоком S6
+- [ ] PR создан, описание заполнено по шаблону Шага 8 скилла
+- [ ] PR смержен в main, CI на main зелёный
+
+**Ссылки на источники:**
+- Скилл реализации: `skills/program-implementation/SKILL.md`
+- Граф вызовов: `docs/design/assess/contracts-graph.md` — секция «S6 drift»
+- Gherkin-mapping: раздел `## Gherkin-mapping` в `slices/06-drift.md`
+- Принцип голова без ветвления: `slices/06-drift.md` §«Принцип: голова без ветвления»
 ```
 
 ### Шаг 12. Заполнить хендофф-чеклист
