@@ -1,13 +1,13 @@
 Feature: structure — L3 структурная полнота
 
   Scenario: опрятный репозиторий проходит
-    When запускаю "structure" на репозитории "repo-good"
+    When запускаю "structure" на репозитории "repo-good-structure"
     Then код возврата 0
     And отчёт содержит JSON-поле "command" со значением "structure"
     And отчёт содержит JSON-поле "layers.L3.status" со значением "pass"
 
   Scenario: битый репозиторий — блокирующее нарушение
-    When запускаю "structure" на репозитории "repo-bad"
+    When запускаю "structure" на репозитории "repo-bad-structure"
     Then код возврата 1
     And отчёт содержит JSON-поле "layers.L3.status" со значением "fail"
 

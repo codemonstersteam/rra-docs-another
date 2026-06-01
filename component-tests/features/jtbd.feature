@@ -1,7 +1,7 @@
 Feature: jtbd — L4 JTBD-присутствие
 
   Scenario: опрятный репозиторий — все четыре JTBD PASS
-    When запускаю "jtbd" на репозитории "repo-good"
+    When запускаю "jtbd" на репозитории "repo-good-jtbd"
     Then код возврата 0
     And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "PASS"
     And отчёт содержит JSON-поле "jtbd.consumer.status" со значением "PASS"
@@ -9,7 +9,7 @@ Feature: jtbd — L4 JTBD-присутствие
     And отчёт содержит JSON-поле "jtbd.agent.status" со значением "PASS"
 
   Scenario: битый репозиторий — есть проваленный JTBD
-    When запускаю "jtbd" на репозитории "repo-bad"
+    When запускаю "jtbd" на репозитории "repo-bad-jtbd"
     Then код возврата 1
     And отчёт содержит JSON-поле "jtbd.agent.status" со значением "FAIL"
 
