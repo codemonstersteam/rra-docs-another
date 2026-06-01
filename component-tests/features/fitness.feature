@@ -8,7 +8,7 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
 
   Scenario: стаб отвечает — четыре потребителя оценены, все PASS
     Given LLM-стаб в режиме "healthy"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 0
     And отчёт содержит JSON-поле "command" со значением "fitness"
     And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "PASS"
@@ -20,7 +20,7 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
 
   Scenario: смешанные вердикты — score независимы и не усредняются
     Given LLM-стаб в режиме "mixed"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 1
     And отчёт содержит JSON-поле "jtbd.agent.status" со значением "FAIL"
     And отчёт содержит непустое JSON-поле "jtbd.agent.gaps"
@@ -30,26 +30,26 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
 
   Scenario: LLM ограничивает частоту
     Given LLM-стаб в режиме "rate_limited"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 2
     And в errors[] есть error.code "llm_rate_limited" с integration "LLMClient"
 
   Scenario: LLM недоступен (сетевой отказ)
     Given LLM-стаб в режиме "unavailable"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 2
     And в errors[] есть error.code "llm_unavailable" с integration "LLMClient"
 
   Scenario: бюджет превышен
     Given LLM-стаб в режиме "budget_exceeded"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 2
     And в errors[] есть error.code "llm_budget_exceeded" с integration "LLMClient"
 
   Scenario: ключ LLM не задан в окружении — LLM не вызывается
     Given LLM-стаб в режиме "healthy"
     And ключ LLM не задан в окружении
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 2
     And в errors[] есть error.code "llm_unavailable" с integration "LLMClient"
 
@@ -58,7 +58,7 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
     # README.md с канцелярским placeholder-текстом, остальные docs отсутствуют.
     # Источник: testdata/real-responses/repo-bad-fitness.json.
     Given LLM-стаб в режиме "bad_repo"
-    When запускаю "fitness" на репозитории "repo-bad"
+    When запускаю "fitness" на репозитории "repo-bad-fitness"
     Then код возврата 1
     And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "FAIL"
     And отчёт содержит непустое JSON-поле "jtbd.maintainer.gaps"
@@ -80,12 +80,12 @@ Feature: fitness — L5 JTBD-пригодность (LLM через стаб)
 
   Scenario: LLM оборачивает JSON в markdown-блок — клиент обязан распарсить
     Given LLM-стаб в режиме "markdown_fenced"
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 0
     And отчёт содержит JSON-поле "jtbd.maintainer.status" со значением "PASS"
 
   Scenario: битый файл --config
     Given битый файл конфигурации
-    When запускаю "fitness" на репозитории "repo-good"
+    When запускаю "fitness" на репозитории "repo-good-fitness"
     Then код возврата 2
     And в errors[] есть error.code "config_invalid"

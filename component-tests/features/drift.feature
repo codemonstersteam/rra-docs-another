@@ -1,12 +1,12 @@
 Feature: drift — L6 дрейф документации (ядро L6a, без ИИ)
 
   Scenario: опрятный репозиторий — дока согласована
-    When запускаю "drift" на репозитории "repo-good"
+    When запускаю "drift" на репозитории "repo-good-drift"
     Then код возврата 0
     And отчёт содержит JSON-поле "layers.L6.status" со значением "pass"
 
   Scenario: битая ссылка — блокирующий дрейф
-    When запускаю "drift" на репозитории "repo-bad"
+    When запускаю "drift" на репозитории "repo-bad-drift"
     Then код возврата 1
     And отчёт содержит JSON-поле "layers.L6.status" со значением "fail"
 
