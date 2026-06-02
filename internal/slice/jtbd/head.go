@@ -4,7 +4,7 @@ import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
 // ProcessJTBD — голова-труба слайса S3 (jtbd).
 // Порядок: NewAuditTarget → NewConfig → store.ReadMarkdownDocs →
-// matchHeadings → buildJTBDCard ×4 → buildReport.
+// matchHeadings → buildJTBDCard по каждой роли из конфига → buildReport.
 func ProcessJTBD(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
@@ -23,11 +23,10 @@ func ProcessJTBD(req domain.Request, deps Deps) (domain.Report, error) {
 
 	idx := matchHeadings(docs, cfg)
 
-	jtbdByRole := map[string]domain.JTBDResult{
-		"maintainer": buildJTBDCard(idx, specMaintainer),
-		"consumer":   buildJTBDCard(idx, specConsumer),
-		"manager":    buildJTBDCard(idx, specManager),
-		"agent":      buildJTBDCard(idx, specAgent),
+	consumers := cfg.JTBDSpec().Consumers()
+	jtbdByRole := make(map[string]domain.JTBDResult, len(consumers))
+	for _, consumer := range consumers {
+		jtbdByRole[consumer.Role()] = buildJTBDCard(idx, consumer)
 	}
 
 	return buildReport(target, req.Command, jtbdByRole), nil

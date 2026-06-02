@@ -70,6 +70,47 @@ func TestNewConfig_badConfig(t *testing.T) {
 	}
 }
 
+// minimalJTBDYAML — минимальная валидная секция jtbd для фикстур,
+// проверяющих другие части конфига (jtbd обязательна в кастомном конфиге).
+const minimalJTBDYAML = "jtbd:\n  consumers:\n    - role: maintainer\n      sections:\n        - name: архитектура\n          synonyms: [архитектура]\n          critical: true\n"
+
+// TestNewConfig_jtbdFromConfig фиксирует: словари секций L4 берутся из YAML,
+// роли не хардкодятся в Go.
+func TestNewConfig_jtbdFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yaml := "jtbd:\n  consumers:\n    - role: custom\n      sections:\n        - name: раздел\n          synonyms: [раздел, section]\n          critical: false\n"
+	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	consumers := cfg.JTBDSpec().Consumers()
+	if len(consumers) != 1 || consumers[0].Role() != "custom" {
+		t.Fatalf("ожидали 1 роль custom, получили %+v", consumers)
+	}
+	secs := consumers[0].Sections()
+	if len(secs) != 1 || secs[0].Name() != "раздел" || secs[0].Critical() {
+		t.Errorf("секция распарсилась неверно: %+v", secs)
+	}
+}
+
+// TestNewConfig_jtbdMissing фиксирует: кастомный конфиг без секции jtbd →
+// config_invalid (решение оператора, не тихий PASS).
+func TestNewConfig_jtbdMissing(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("thresholds:\n  drift_days: 30\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+	if !errors.Is(err, domain.ErrConfigInvalid) {
+		t.Fatalf("expected ErrConfigInvalid, got %v", err)
+	}
+}
+
 // ── NewLLMConfig ─────────────────────────────────────────────────────────────
 
 func TestNewLLMConfig_happy(t *testing.T) {
@@ -109,7 +150,8 @@ func TestNewLLMConfig_baseURLFromConfigLayer(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	yaml := "llm:\n  provider: openai\n  base_url: http://cfg-host:9999/v1\n  model: cfg-model\n"
+	yaml := "llm:\n  provider: openai\n  base_url: http://cfg-host:9999/v1\n  model: cfg-model\n" +
+		minimalJTBDYAML
 	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}

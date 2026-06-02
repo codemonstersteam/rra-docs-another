@@ -83,3 +83,38 @@ docs:
 thresholds:
   drift_days: 90
   readability_min: 50
+
+# jtbd — словари обязательных секций по JTBD-ролям (слой L4, слайс jtbd).
+# name      — каноническое имя секции (попадает в gaps при отсутствии).
+# synonyms  — нормализованные подстроки (нижний регистр); хотя бы одна должна
+#             входить в нормализованный заголовок H1–H3 документа.
+# critical  — true → отсутствие даёт FAIL, false → PARTIAL.
+# Секция обязательна: кастомный --config без jtbd → config_invalid.
+jtbd:
+  consumers:
+    - role: maintainer
+      sections:
+        - name: архитектура
+          synonyms: [архитектура, architecture]
+          critical: true
+        - name: контрибьютить
+          synonyms: [контрибьютить, contributing]
+          critical: true
+    - role: consumer
+      sections:
+        - name: запуск
+          synonyms: [запуск, quick start, getting started, install]
+          critical: true
+        - name: api
+          synonyms: [api, апи, endpoints]
+          critical: false
+    - role: manager
+      sections:
+        - name: умеет
+          synonyms: [умеет, capabilities, features, overview]
+          critical: true
+    - role: agent
+      sections:
+        - name: agents
+          synonyms: [agents, агент, контекст]
+          critical: true

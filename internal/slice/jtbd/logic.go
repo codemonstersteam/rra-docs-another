@@ -1,7 +1,8 @@
 // Package jtbd реализует слайс S3 — L4 JTBD-присутствие.
 // Чистые функции: нет I/O, нет глобального состояния.
 // Логика: matchHeadings строит индекс H1–H3, buildJTBDCard проверяет
-// обязательные секции каждой роли против индекса.
+// обязательные секции каждой роли против индекса. Словари секций приходят
+// из конфига (domain.JTBDSpec), не хардкодятся.
 package jtbd
 
 import (
@@ -14,52 +15,6 @@ import (
 
 // headingIndex — нормализованный заголовок → "file:line"
 type headingIndex map[string]string
-
-// sectionSpec — обязательная секция для JTBD-роли.
-// synonyms: список нормализованных синонимов; хотя бы один должен быть
-// подстрокой нормализованного заголовка.
-// critical: true → отсутствие даёт FAIL, false → PARTIAL.
-type sectionSpec struct {
-	synonyms []string
-	critical bool
-}
-
-// consumerSpec — набор обязательных секций для одной JTBD-роли.
-type consumerSpec struct {
-	role     string
-	sections []sectionSpec
-}
-
-// Словари синонимов для четырёх JTBD-потребителей.
-// Первый синоним каждой секции — каноническое имя (появляется в gaps).
-var (
-	specMaintainer = consumerSpec{
-		role: "maintainer",
-		sections: []sectionSpec{
-			{synonyms: []string{"архитектура", "architecture"}, critical: true},
-			{synonyms: []string{"контрибьютить", "contributing"}, critical: true},
-		},
-	}
-	specConsumer = consumerSpec{
-		role: "consumer",
-		sections: []sectionSpec{
-			{synonyms: []string{"запуск", "quick start", "getting started", "install"}, critical: true},
-			{synonyms: []string{"api", "апи", "endpoints"}, critical: false},
-		},
-	}
-	specManager = consumerSpec{
-		role: "manager",
-		sections: []sectionSpec{
-			{synonyms: []string{"умеет", "capabilities", "features", "overview"}, critical: true},
-		},
-	}
-	specAgent = consumerSpec{
-		role: "agent",
-		sections: []sectionSpec{
-			{synonyms: []string{"agents", "агент", "контекст"}, critical: true},
-		},
-	}
-)
 
 // matchHeadings нормализует H1–H3 из всех документов и возвращает headingIndex.
 // Первое вхождение нормализованной формы побеждает при дублях.
@@ -98,9 +53,9 @@ func normalizeHeading(text string) string {
 
 // sectionPresent возвращает true, если хотя бы один нормализованный заголовок
 // в индексе содержит один из синонимов секции как подстроку.
-func sectionPresent(idx headingIndex, sec sectionSpec) bool {
+func sectionPresent(idx headingIndex, sec domain.JTBDSection) bool {
 	for norm := range idx {
-		for _, syn := range sec.synonyms {
+		for _, syn := range sec.Synonyms() {
 			if strings.Contains(norm, syn) {
 				return true
 			}
@@ -118,18 +73,19 @@ func sectionPresent(idx headingIndex, sec sectionSpec) bool {
 //
 // Score = (найденных / всего) × 100.
 // Gaps — канонические имена отсутствующих секций.
-func buildJTBDCard(idx headingIndex, spec consumerSpec) domain.JTBDResult {
+func buildJTBDCard(idx headingIndex, consumer domain.JTBDConsumer) domain.JTBDResult {
 	var gaps []string
 	present := 0
 	hasCriticalGap := false
 	hasNonCriticalGap := false
 
-	for _, sec := range spec.sections {
+	sections := consumer.Sections()
+	for _, sec := range sections {
 		if sectionPresent(idx, sec) {
 			present++
 		} else {
-			gaps = append(gaps, sec.synonyms[0])
-			if sec.critical {
+			gaps = append(gaps, sec.Name())
+			if sec.Critical() {
 				hasCriticalGap = true
 			} else {
 				hasNonCriticalGap = true
@@ -137,7 +93,7 @@ func buildJTBDCard(idx headingIndex, spec consumerSpec) domain.JTBDResult {
 		}
 	}
 
-	total := len(spec.sections)
+	total := len(sections)
 	score := 100
 	if total > 0 {
 		score = present * 100 / total

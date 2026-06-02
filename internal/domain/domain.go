@@ -113,6 +113,16 @@ type configYAML struct {
 		DriftDays      int `yaml:"drift_days"`
 		ReadabilityMin int `yaml:"readability_min"`
 	} `yaml:"thresholds"`
+	JTBD struct {
+		Consumers []struct {
+			Role     string `yaml:"role"`
+			Sections []struct {
+				Name     string   `yaml:"name"`
+				Synonyms []string `yaml:"synonyms"`
+				Critical bool     `yaml:"critical"`
+			} `yaml:"sections"`
+		} `yaml:"consumers"`
+	} `yaml:"jtbd"`
 }
 
 // Config — валидированный проектный конфиг (неэкспортируемые поля).
@@ -128,6 +138,7 @@ type Config struct {
 	llmBaseURL         string
 	llmModel           string
 	maxJudgeCalls      int
+	jtbdSpec           JTBDSpec
 }
 
 // LLMProvider/LLMBaseURL/LLMModel — слой YAML-конфига для LLM-подключения
@@ -168,6 +179,11 @@ func (c Config) LLMPrompt(role string) string {
 	return c.llmPrompts[role]
 }
 
+// JTBDSpec возвращает словарь обязательных секций по JTBD-ролям (слой L4).
+// Узкий срез Config: голова слайса jtbd передаёт его в чистую логику,
+// не таская весь Config.
+func (c Config) JTBDSpec() JTBDSpec { return c.jtbdSpec }
+
 // NewConfig валидирует и создаёт Config.
 // Если ConfigPath пуст — берётся встроенный дефолт (go:embed).
 // Failure: ErrConfigInvalid.
@@ -203,6 +219,10 @@ func parseConfigYAML(data []byte) (Config, error) {
 	if mjc == 0 {
 		mjc = 20
 	}
+	jtbdSpec, err := buildJTBDSpec(raw)
+	if err != nil {
+		return Config{}, err
+	}
 	return Config{
 		driftThresholdDays: dt,
 		readabilityMin:     rm,
@@ -215,7 +235,72 @@ func parseConfigYAML(data []byte) (Config, error) {
 		llmBaseURL:         raw.LLM.BaseURL,
 		llmModel:           raw.LLM.Model,
 		maxJudgeCalls:      mjc,
+		jtbdSpec:           jtbdSpec,
 	}, nil
+}
+
+// ── JTBDSpec — словари секций L4 ─────────────────────────────────────────────
+
+// JTBDSpec — словарь обязательных секций по JTBD-ролям (неэкспортируемые поля).
+// Создаётся из YAML внутри NewConfig (buildJTBDSpec), доступен через Config.JTBDSpec().
+type JTBDSpec struct {
+	consumers []JTBDConsumer
+}
+
+// JTBDConsumer — набор обязательных секций для одной JTBD-роли.
+type JTBDConsumer struct {
+	role     string
+	sections []JTBDSection
+}
+
+// JTBDSection — обязательная секция: хотя бы один synonym должен входить
+// (как подстрока) в нормализованный заголовок документа.
+type JTBDSection struct {
+	name     string
+	synonyms []string
+	critical bool
+}
+
+func (s JTBDSpec) Consumers() []JTBDConsumer   { return s.consumers }
+func (c JTBDConsumer) Role() string            { return c.role }
+func (c JTBDConsumer) Sections() []JTBDSection { return c.sections }
+func (s JTBDSection) Name() string             { return s.name }
+func (s JTBDSection) Synonyms() []string       { return s.synonyms }
+func (s JTBDSection) Critical() bool           { return s.critical }
+
+// buildJTBDSpec валидирует raw-секцию jtbd и собирает JTBDSpec.
+// Антецедент: ≥1 consumer; у каждого непустой role и ≥1 section; у каждой
+// section непустой name и ≥1 synonym. Роли не фиксированы — берутся из конфига.
+// Failure: ErrConfigInvalid (в т.ч. отсутствие секции jtbd в кастомном конфиге).
+func buildJTBDSpec(raw configYAML) (JTBDSpec, error) {
+	if len(raw.JTBD.Consumers) == 0 {
+		return JTBDSpec{}, fmt.Errorf("%w: секция jtbd пуста или отсутствует", ErrConfigInvalid)
+	}
+	consumers := make([]JTBDConsumer, 0, len(raw.JTBD.Consumers))
+	for _, rc := range raw.JTBD.Consumers {
+		if rc.Role == "" {
+			return JTBDSpec{}, fmt.Errorf("%w: jtbd-роль с пустым role", ErrConfigInvalid)
+		}
+		if len(rc.Sections) == 0 {
+			return JTBDSpec{}, fmt.Errorf("%w: роль %q без секций", ErrConfigInvalid, rc.Role)
+		}
+		sections := make([]JTBDSection, 0, len(rc.Sections))
+		for _, rs := range rc.Sections {
+			if rs.Name == "" {
+				return JTBDSpec{}, fmt.Errorf("%w: роль %q: секция без name", ErrConfigInvalid, rc.Role)
+			}
+			if len(rs.Synonyms) == 0 {
+				return JTBDSpec{}, fmt.Errorf("%w: роль %q, секция %q без synonyms", ErrConfigInvalid, rc.Role, rs.Name)
+			}
+			sections = append(sections, JTBDSection{
+				name:     rs.Name,
+				synonyms: rs.Synonyms,
+				critical: rs.Critical,
+			})
+		}
+		consumers = append(consumers, JTBDConsumer{role: rc.Role, sections: sections})
+	}
+	return JTBDSpec{consumers: consumers}, nil
 }
 
 // ── LLMConfig ────────────────────────────────────────────────────────────────
