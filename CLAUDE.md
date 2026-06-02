@@ -19,28 +19,35 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 | Каркас (E0) | done |
 | Контракт + Gherkin (E1, гейт) | done (PR1 контракт + PR2 godog в main) |
 | Проектный пакет (E2) | done (дизайн-PR влит = аппрув) |
-| Реализация слайсов S1–S7 (E3–E9) | in progress (S1–S3, S5 в main) |
+| Реализация слайсов S1–S7 (E3–E9) | in progress (S1–S3, S5, S6 в main; S7 next) |
 
 ## Следующий шаг
 
 **S4 `style` (L2) отложен в TBD** — внешние тулзы (Vale/markdownlint) не тянем,
 состав L2 проектируем отдельно и научно (см. `backlog.md` → «Где мы сейчас»).
 
-Следующий — **S6 `drift`** (L6a, детерминированный, ноль новых I/O) по утверждённой
-карте `docs/design/assess/slices/06-drift.md`. Дизайн сверен с оператором: голова
-`ProcessDrift` — **линейная труба без ветвления**; `--semantic` (тир L6c, S8) решается
-на краю (роутер выбирает реализацию `Judge`: реальный `LLMClient` / `NoopJudge`),
-не ветвит голову; слияние L6a+L6c-находок — узел-конструктор `NewDriftReport`.
-claim-kinds v1: `link`/path (против `Files`) + `dependency` (против `Manifests`);
-`env`/`subcommand` отложены (нужен новый I/O). Реализация Sonnet'ом, L6a первым.
-Затем chore-PR: промоут `LLMClient` `fitness/io.go` → `internal/io` (+ `Judge`),
-после — L6c за флагом (`08-drift-semantic.md`, по skill `http-io`). Далее S7 `assess`.
+Влиты S1–S3 (L3, L1, L4), S5 `fitness` (L5, LLM), S6 `drift` (L6a,
+детерминированный, `Judge`/`NoopJudge`, 24/24 компонентных зелёных). Конформанс с
+ADR 0003 закрыт (E14, PR #9): словари L4, обязательные файлы L3 и манифесты L6
+вынесены из хардкода в дефолтный конфиг.
+
+Следующий — **S7 `assess`**: сборка финального пайплайна из листьев S1–S6
+(L1/L3/L4/L5/L6a), short-circuit «L4 упал → не звать дорогой L5», четыре
+независимых score + пробелы. Новых I/O нет — слайс только оркеструет уже
+существующие листья (чеклист `http-io` не нужен). По конвенции слайса голову
+`ProcessAssess` и иерархию узлов утвердить с оператором ДО кода (дизайн-карта
+`docs/design/assess/slices/07-assess.md`); реализация — Sonnet.
+
+Follow-up за S7 — **S8 `drift --semantic`** (тир L6c за флагом): `--semantic`
+решается на краю (роутер выбирает реализацию `Judge`: реальный `LLMClient` /
+`NoopJudge`), не ветвит голову `ProcessDrift`; перед S8 chore-PR — промоут
+`LLMClient` `fitness/io.go` → `internal/io` (+ `Judge`); затем L6c по
+`08-drift-semantic.md` и skill `http-io`.
 
 Конвенция слайса (как в `ubik/passkey-demo-api`, см. `infrastructure.md`):
 самодостаточный пакет `internal/slice/<name>/` — `head.go` (`Process<Slice>` —
 голова), `adapter.go` (парсинг), `logic.go`, `register.go` (`Deps`+`NewDeps`).
-Общие `internal/{domain,io,cli}` (egress в `cli`). Образцы — S1–S3, S5 в main.
-Дальше S6 `drift` (L6a) → S7 `assess`. S8 (`drift --semantic`, L6c) — follow-up за флагом.
+Общие `internal/{domain,io,cli}` (egress в `cli`). Образцы — S1–S3, S5, S6 в main.
 
 ## Принятые решения
 
