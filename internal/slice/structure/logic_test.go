@@ -9,24 +9,26 @@ import (
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/structure"
 )
 
-// ── checkReadmePresent ────────────────────────────────────────────────────────
+// ── checkRequiredFiles ────────────────────────────────────────────────────────
 
-func TestCheckReadmePresent_happy(t *testing.T) {
+func TestCheckRequiredFiles_happy(t *testing.T) {
+	cfg := structure.ExportMakeConfig(90) // дефолт: required_files = [README.md]
 	s := domain.RepoStructure{Files: []string{"README.md", "main.go"}}
-	vs := structure.ExportCheckReadmePresent(s)
+	vs := structure.ExportCheckRequiredFiles(s, cfg)
 	if len(vs) != 0 {
 		t.Fatalf("expected no violations, got %v", vs)
 	}
 }
 
-func TestCheckReadmePresent_missing(t *testing.T) {
+func TestCheckRequiredFiles_missing(t *testing.T) {
+	cfg := structure.ExportMakeConfig(90)
 	s := domain.RepoStructure{Files: []string{"main.go"}}
-	vs := structure.ExportCheckReadmePresent(s)
+	vs := structure.ExportCheckRequiredFiles(s, cfg)
 	if len(vs) == 0 {
 		t.Fatal("expected violation, got none")
 	}
-	if vs[0].Code != "missing_readme" {
-		t.Errorf("expected missing_readme, got %s", vs[0].Code)
+	if vs[0].Code != "missing_required_file" {
+		t.Errorf("expected missing_required_file, got %s", vs[0].Code)
 	}
 	if vs[0].Severity != "blocker" {
 		t.Errorf("expected blocker, got %s", vs[0].Severity)

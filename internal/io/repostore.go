@@ -21,8 +21,10 @@ type RepoStore struct{}
 func NewRepoStore() RepoStore { return RepoStore{} }
 
 // ReadStructure обходит репозиторий и возвращает RepoStructure.
+// manifestNames — список известных манифестов (из конфига), по которым
+// собираются зависимости; I/O берёт готовый список, ничего не хардкодит.
 // Failure: ErrReadError (ФС недоступна).
-func (s RepoStore) ReadStructure(target domain.AuditTarget) (domain.RepoStructure, error) {
+func (s RepoStore) ReadStructure(target domain.AuditTarget, manifestNames []string) (domain.RepoStructure, error) {
 	root := target.Root()
 
 	files, mtimes, err := walkFiles(root)
@@ -35,7 +37,7 @@ func (s RepoStore) ReadStructure(target domain.AuditTarget) (domain.RepoStructur
 		return domain.RepoStructure{}, fmt.Errorf("%w: %s", domain.ErrReadError, err)
 	}
 
-	manifests := collectManifests(root, files)
+	manifests := collectManifests(root, files, manifestNames)
 
 	return domain.RepoStructure{
 		Files:     files,
@@ -183,14 +185,12 @@ func parseHeading(line string, lineNum int) (domain.Heading, bool) {
 	return domain.Heading{Level: level, Text: text, Line: lineNum}, true
 }
 
-// collectManifests собирает go.mod, package.json и другие манифесты.
-func collectManifests(root string, files []string) map[string]string {
-	known := map[string]struct{}{
-		"go.mod":           {},
-		"package.json":     {},
-		"Cargo.toml":       {},
-		"pyproject.toml":   {},
-		"requirements.txt": {},
+// collectManifests читает содержимое файлов из repo, basename которых входит
+// в names (список известных манифестов из конфига).
+func collectManifests(root string, files []string, names []string) map[string]string {
+	known := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		known[n] = struct{}{}
 	}
 	manifests := make(map[string]string)
 	for _, rel := range files {

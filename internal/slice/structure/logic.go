@@ -11,24 +11,33 @@ import (
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 )
 
-// checkReadmePresent проверяет наличие README.md в корне репозитория.
-// Failure: Violation{severity:blocker}.
-func checkReadmePresent(structure domain.RepoStructure) []domain.Violation {
+// checkRequiredFiles проверяет наличие обязательных файлов (cfg.RequiredFiles)
+// в корне репозитория. Список задаётся конфигом, не хардкодится; сопоставление
+// по basename, регистронезависимо.
+// Failure: Violation{severity:blocker} на каждый отсутствующий файл.
+func checkRequiredFiles(structure domain.RepoStructure, cfg domain.Config) []domain.Violation {
+	// Множество basename'ов файлов в корне (без поддиректорий).
+	rootFiles := make(map[string]struct{})
 	for _, f := range structure.Files {
-		// README.md прямо в корне (без поддиректорий).
-		base := filepath.Base(f)
-		dir := filepath.Dir(f)
-		if dir == "." && strings.EqualFold(base, "readme.md") {
-			return nil
+		if filepath.Dir(f) == "." {
+			rootFiles[strings.ToLower(filepath.Base(f))] = struct{}{}
 		}
 	}
-	return []domain.Violation{{
-		Code:     "missing_readme",
-		Layer:    "L3",
-		Severity: "blocker",
-		File:     "README.md",
-		Message:  "README.md отсутствует в корне репозитория",
-	}}
+
+	var violations []domain.Violation
+	for _, req := range cfg.RequiredFiles() {
+		if _, ok := rootFiles[strings.ToLower(filepath.Base(req))]; ok {
+			continue
+		}
+		violations = append(violations, domain.Violation{
+			Code:     "missing_required_file",
+			Layer:    "L3",
+			Severity: "blocker",
+			File:     req,
+			Message:  fmt.Sprintf("%s отсутствует в корне репозитория", req),
+		})
+	}
+	return violations
 }
 
 // checkLinksResolve проверяет, что все Markdown-ссылки на локальные файлы резолвятся.
@@ -150,20 +159,20 @@ func checkDocDrift(structure domain.RepoStructure, cfg domain.Config) []domain.V
 // Status=fail при наличии blocker; warn если только warning; иначе pass.
 // Score — доля пройденных проверок (0–100).
 func checkStructure(structure domain.RepoStructure, cfg domain.Config) domain.LayerOutcome {
-	readme := checkReadmePresent(structure)
+	required := checkRequiredFiles(structure, cfg)
 	links := checkLinksResolve(structure)
 	drift := checkDocDrift(structure, cfg)
 
-	all := make([]domain.Violation, 0, len(readme)+len(links)+len(drift))
-	all = append(all, readme...)
+	all := make([]domain.Violation, 0, len(required)+len(links)+len(drift))
+	all = append(all, required...)
 	all = append(all, links...)
 	all = append(all, drift...)
 
-	// Score — доля пройденных из трёх проверок. README и ссылки могут дать blocker;
-	// drift — только warning, в знаменателе считается всегда пройденной.
+	// Score — доля пройденных из трёх проверок. required-files и ссылки могут дать
+	// blocker; drift — только warning, в знаменателе считается всегда пройденной.
 	const total = 3
 	failed := 0
-	if hasBlocker(readme) {
+	if hasBlocker(required) {
 		failed++
 	}
 	if hasBlocker(links) {

@@ -80,6 +80,58 @@ docs:
   - CONTRIBUTING.md
   - AGENTS.md
 
+# required_files — обязательные файлы в корне репозитория (слой L3, слайс
+# structure). Сопоставление по basename, регистронезависимо. Отсутствие любого —
+# blocker (code: missing_required_file). Секция обязательна: кастомный --config
+# без required_files → config_invalid.
+required_files:
+  - README.md
+
+# manifests — известные файлы-манифесты для разбора зависимостей (claim-kind
+# dependency, слой L6, слайс drift). Сопоставление по basename. Секция
+# обязательна: кастомный --config без manifests → config_invalid.
+manifests:
+  - go.mod
+  - package.json
+  - Cargo.toml
+  - pyproject.toml
+  - requirements.txt
+
 thresholds:
   drift_days: 90
   readability_min: 50
+
+# jtbd — словари обязательных секций по JTBD-ролям (слой L4, слайс jtbd).
+# name      — каноническое имя секции (попадает в gaps при отсутствии).
+# synonyms  — нормализованные подстроки (нижний регистр); хотя бы одна должна
+#             входить в нормализованный заголовок H1–H3 документа.
+# critical  — true → отсутствие даёт FAIL, false → PARTIAL.
+# Секция обязательна: кастомный --config без jtbd → config_invalid.
+jtbd:
+  consumers:
+    - role: maintainer
+      sections:
+        - name: архитектура
+          synonyms: [архитектура, architecture]
+          critical: true
+        - name: контрибьютить
+          synonyms: [контрибьютить, contributing]
+          critical: true
+    - role: consumer
+      sections:
+        - name: запуск
+          synonyms: [запуск, quick start, getting started, install]
+          critical: true
+        - name: api
+          synonyms: [api, апи, endpoints]
+          critical: false
+    - role: manager
+      sections:
+        - name: умеет
+          synonyms: [умеет, capabilities, features, overview]
+          critical: true
+    - role: agent
+      sections:
+        - name: agents
+          synonyms: [agents, агент, контекст]
+          critical: true

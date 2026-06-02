@@ -133,7 +133,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "description": "Машинный код нарушения (например broken_link, missing_readme, line_too_long)."
+          "description": "Машинный код нарушения (например broken_link, missing_required_file, line_too_long)."
         },
         "layer": { "$ref": "#/$defs/layerId" },
         "severity": {
