@@ -107,9 +107,11 @@ type configYAML struct {
 		MaxRetries    int    `yaml:"max_retries"`
 		MaxJudgeCalls int    `yaml:"max_judge_calls"`
 	} `yaml:"llm"`
-	Docs       []string          `yaml:"docs"`
-	Prompts    map[string]string `yaml:"prompts"`
-	Thresholds struct {
+	Docs          []string          `yaml:"docs"`
+	RequiredFiles []string          `yaml:"required_files"`
+	Manifests     []string          `yaml:"manifests"`
+	Prompts       map[string]string `yaml:"prompts"`
+	Thresholds    struct {
 		DriftDays      int `yaml:"drift_days"`
 		ReadabilityMin int `yaml:"readability_min"`
 	} `yaml:"thresholds"`
@@ -131,6 +133,8 @@ type Config struct {
 	readabilityMin     int
 	llmPrompts         map[string]string
 	docs               []string
+	requiredFiles      []string
+	manifests          []string
 	llmCallDelayMs     int
 	llmTokenBudget     int
 	llmMaxRetries      int
@@ -153,6 +157,13 @@ func (c Config) ReadabilityMin() int     { return c.readabilityMin }
 
 // Docs возвращает список doc-файлов для проверки (относительные пути от корня репо).
 func (c Config) Docs() []string { return c.docs }
+
+// RequiredFiles возвращает обязательные файлы в корне репо (L3, слайс structure).
+func (c Config) RequiredFiles() []string { return c.requiredFiles }
+
+// Manifests возвращает известные файлы-манифесты для разбора зависимостей
+// (claim-kind dependency, L6, слайс drift).
+func (c Config) Manifests() []string { return c.manifests }
 
 // LLMCallDelayMs возвращает задержку между последовательными LLM-вызовами (мс).
 // 0 = без задержки (дефолт для тестов). Для реального API рекомендуется 10000.
@@ -223,11 +234,19 @@ func parseConfigYAML(data []byte) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if len(raw.RequiredFiles) == 0 {
+		return Config{}, fmt.Errorf("%w: секция required_files пуста или отсутствует", ErrConfigInvalid)
+	}
+	if len(raw.Manifests) == 0 {
+		return Config{}, fmt.Errorf("%w: секция manifests пуста или отсутствует", ErrConfigInvalid)
+	}
 	return Config{
 		driftThresholdDays: dt,
 		readabilityMin:     rm,
 		llmPrompts:         raw.Prompts,
 		docs:               raw.Docs,
+		requiredFiles:      raw.RequiredFiles,
+		manifests:          raw.Manifests,
 		llmCallDelayMs:     raw.LLM.CallDelayMs,
 		llmTokenBudget:     tb,
 		llmMaxRetries:      raw.LLM.MaxRetries,

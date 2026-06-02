@@ -80,6 +80,23 @@ docs:
   - CONTRIBUTING.md
   - AGENTS.md
 
+# required_files — обязательные файлы в корне репозитория (слой L3, слайс
+# structure). Сопоставление по basename, регистронезависимо. Отсутствие любого —
+# blocker (code: missing_required_file). Секция обязательна: кастомный --config
+# без required_files → config_invalid.
+required_files:
+  - README.md
+
+# manifests — известные файлы-манифесты для разбора зависимостей (claim-kind
+# dependency, слой L6, слайс drift). Сопоставление по basename. Секция
+# обязательна: кастомный --config без manifests → config_invalid.
+manifests:
+  - go.mod
+  - package.json
+  - Cargo.toml
+  - pyproject.toml
+  - requirements.txt
+
 thresholds:
   drift_days: 90
   readability_min: 50

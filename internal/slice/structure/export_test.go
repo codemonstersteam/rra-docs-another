@@ -3,7 +3,7 @@ package structure
 
 import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
-var ExportCheckReadmePresent = checkReadmePresent
+var ExportCheckRequiredFiles = checkRequiredFiles
 var ExportCheckLinksResolve = checkLinksResolve
 var ExportCheckDocDrift = checkDocDrift
 var ExportCheckStructure = checkStructure

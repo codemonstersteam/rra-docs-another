@@ -18,7 +18,7 @@ func ProcessDrift(req domain.Request, deps Deps) (domain.Report, error) {
 		return domain.Report{}, err
 	}
 
-	structure, err := deps.Store.ReadStructure(target)
+	structure, err := deps.Store.ReadStructure(target, cfg.Manifests())
 	if err != nil {
 		return domain.Report{}, err
 	}

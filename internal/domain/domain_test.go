@@ -74,12 +74,17 @@ func TestNewConfig_badConfig(t *testing.T) {
 // проверяющих другие части конфига (jtbd обязательна в кастомном конфиге).
 const minimalJTBDYAML = "jtbd:\n  consumers:\n    - role: maintainer\n      sections:\n        - name: архитектура\n          synonyms: [архитектура]\n          critical: true\n"
 
+// filesAndManifestsYAML — обязательные секции required_files и manifests для
+// фикстур (обе обязательны в кастомном конфиге, как и jtbd).
+const filesAndManifestsYAML = "required_files: [README.md]\nmanifests: [go.mod]\n"
+
 // TestNewConfig_jtbdFromConfig фиксирует: словари секций L4 берутся из YAML,
 // роли не хардкодятся в Go.
 func TestNewConfig_jtbdFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
-	yaml := "jtbd:\n  consumers:\n    - role: custom\n      sections:\n        - name: раздел\n          synonyms: [раздел, section]\n          critical: false\n"
+	yaml := "jtbd:\n  consumers:\n    - role: custom\n      sections:\n        - name: раздел\n          synonyms: [раздел, section]\n          critical: false\n" +
+		filesAndManifestsYAML
 	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +99,50 @@ func TestNewConfig_jtbdFromConfig(t *testing.T) {
 	secs := consumers[0].Sections()
 	if len(secs) != 1 || secs[0].Name() != "раздел" || secs[0].Critical() {
 		t.Errorf("секция распарсилась неверно: %+v", secs)
+	}
+}
+
+// TestNewConfig_filesAndManifestsFromConfig фиксирует: required_files и manifests
+// берутся из YAML (не хардкод в Go).
+func TestNewConfig_filesAndManifestsFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yaml := minimalJTBDYAML +
+		"required_files: [README.md, LICENSE]\nmanifests: [go.mod, deno.json]\n"
+	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	if got := cfg.RequiredFiles(); len(got) != 2 || got[1] != "LICENSE" {
+		t.Errorf("RequiredFiles = %v, want [README.md LICENSE]", got)
+	}
+	if got := cfg.Manifests(); len(got) != 2 || got[1] != "deno.json" {
+		t.Errorf("Manifests = %v, want [go.mod deno.json]", got)
+	}
+}
+
+// TestNewConfig_requiredSectionsMissing фиксирует: кастомный конфиг без
+// required_files или без manifests → config_invalid (не тихая деградация).
+func TestNewConfig_requiredSectionsMissing(t *testing.T) {
+	cases := map[string]string{
+		"без required_files": minimalJTBDYAML + "manifests: [go.mod]\n",
+		"без manifests":      minimalJTBDYAML + "required_files: [README.md]\n",
+	}
+	for name, yaml := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.yaml")
+			if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+			if !errors.Is(err, domain.ErrConfigInvalid) {
+				t.Fatalf("expected ErrConfigInvalid, got %v", err)
+			}
+		})
 	}
 }
 
@@ -151,7 +200,7 @@ func TestNewLLMConfig_baseURLFromConfigLayer(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	yaml := "llm:\n  provider: openai\n  base_url: http://cfg-host:9999/v1\n  model: cfg-model\n" +
-		minimalJTBDYAML
+		minimalJTBDYAML + filesAndManifestsYAML
 	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
