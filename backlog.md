@@ -414,11 +414,19 @@ MIME, имена веток, внешние `org/repo`): вынесен в **E16
 **Решение (для реализации — Sonnet не проектирует, реализует).**
 1. Заменить «есть расширение = `.<1–8 alnum>`» на **allowlist реальных расширений**
    (последний сегмент оканчивается на `.<ext>`, `<ext>` ∈ списке, регистронезависимо).
-   Стартовый список (держать одним `var`, расширяемый): `md markdown txt go mod sum
-   sh bash yml yaml json toml feature sql proto py rs ts js tsx html css`.
+   **Список — из конфига, не хардкод** (ADR 0003 / E14: словари в YAML, как
+   `manifests`/`required_files`/`jtbd`). Новая секция в `internal/domain/defaults/
+   config.yaml` — `link_extensions:` со стартовым набором: `md markdown txt go mod
+   sum sh bash yml yaml json toml feature sql proto py rs ts js tsx html css`.
+   Доступ — `Config.LinkExtensions() []string` (зеркало `Config.Manifests()`).
+   Валидация по образцу `manifests`: секция **обязательна** — кастомный `--config`
+   без `link_extensions` → `config_invalid` (решение оператора, не тихий дефолт).
 2. Дополнить reject-правила T1: отбрасывать токены с ведущим `~` (как уже `/`).
 3. Ветку «первый сегмент = топ-уровневый элемент репо» (из T1b) **сохранить** — она
    держит реальные бесрасширенные ссылки (`docs/adr`, `internal/auth`).
+
+Предикат остаётся чистой функцией: allowlist приходит параметром (голова/`Evaluate`
+достаёт `cfg.LinkExtensions()` и передаёт вниз — как `cfg.Manifests()` в `extractClaims`).
 
 Проверка по классам: `paths./users/me.get` (ext `get`∉list, top-seg `paths.`∉repo →
 reject), `crypto/rand.Reader` (ext `Reader`∉list, top-seg ∉repo → reject),
@@ -433,9 +441,15 @@ reject), `crypto/rand.Reader` (ext `Reader`∉list, top-seg ∉repo → reject),
 
 **DoD:**
 
+- [ ] `internal/domain/defaults/config.yaml` — секция `link_extensions:` со
+  стартовым набором (комментарий: секция обязательна, как `manifests`).
+- [ ] `internal/domain/domain.go` — `Config.LinkExtensions() []string` + валидация
+  (отсутствие в кастомном `--config` → `ErrConfigInvalid`), по образцу `Manifests()`.
+- [ ] `internal/domain/domain_test.go` — юнит на `LinkExtensions()` + ветка
+  `config_invalid` без секции (по образцу существующих тестов конфига).
 - [ ] `internal/slice/drift/logic.go` — extension-ветка предиката проверяет allowlist
-  (один `var` с расширениями); добавлен reject ведущего `~`; ветка top-seg из T1b
-  сохранена; всё — чистые функции, без I/O.
+  **из параметра** (`cfg.LinkExtensions()`, прокинут через `extractClaims`); добавлен
+  reject ведущего `~`; ветка top-seg из T1b сохранена; всё — чистые функции, без I/O.
 - [ ] `internal/slice/drift/logic_test.go` — юниты по формуле: ветки на reject
   (`paths./users/me.get`, `crypto/rand.Reader`, `~/x.md`) + happy (`docs/architecture.md`,
   `scripts/run-tests.sh`, `x.feature`, `docs/adr` по top-seg).
