@@ -1,4 +1,3 @@
-@wip
 Feature: assess — весь пайплайн L1–L6, дешёвое-первым, short-circuit
 
   Scenario: опрятный репозиторий — четыре JTBD PASS
