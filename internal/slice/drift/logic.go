@@ -72,12 +72,21 @@ func inlineBacktickPaths(line string) []string {
 	return result
 }
 
-// isFilePath — истинно для строк, похожих на относительный путь к файлу:
-// содержат "/", без "://", без glob-символов, пробелов и angle-bracket-шаблонов.
+// isFilePath — истинно для строк, похожих на относительный путь к файлу.
+// Reject-классы (ложные срабатывания на реальных репо):
+//   - нет "/" — не путь;
+//   - "://" — URL со схемой;
+//   - "@" — git-remote (git@github.com:…) или e-mail;
+//   - "..." — плейсхолдер (/v1/...);
+//   - начинается с "/" — filesystem-абсолют (API-роут или концепт, не файл репо);
+//   - начинается с "-" или содержит glob/angle-bracket.
 func isFilePath(s string) bool {
 	return s != "" &&
 		strings.Contains(s, "/") &&
 		!strings.Contains(s, "://") &&
+		!strings.Contains(s, "@") &&
+		!strings.Contains(s, "...") &&
+		!strings.HasPrefix(s, "/") &&
 		!strings.HasPrefix(s, "-") &&
 		!strings.ContainsAny(s, "* ?<>")
 }

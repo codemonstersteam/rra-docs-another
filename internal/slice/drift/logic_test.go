@@ -218,3 +218,59 @@ func TestBuildDriftOutcome_blockerFail(t *testing.T) {
 		t.Errorf("expected blocker, got %s", outcome.Violations[0].Severity)
 	}
 }
+
+// ── isFilePath ────────────────────────────────────────────────────────────────
+
+func TestIsFilePath_happy(t *testing.T) {
+	valid := []string{
+		"docs/adr",
+		"docs/architecture.md",
+		"internal/io/repostore.go",
+		"config/settings.yaml",
+		"component-tests/README.md",
+		"cmd/api/main.go",
+	}
+	for _, s := range valid {
+		if !drift.ExportIsFilePath(s) {
+			t.Errorf("isFilePath(%q) = false, хотя должен быть валидным путём", s)
+		}
+	}
+}
+
+func TestIsFilePath_rejectGitRemote(t *testing.T) {
+	cases := []string{
+		"git@github.com:ubik-life/passkey-demo-api.git",
+		"user@example.com/repo",
+	}
+	for _, s := range cases {
+		if drift.ExportIsFilePath(s) {
+			t.Errorf("isFilePath(%q) = true, git-remote/e-mail не должен быть путём", s)
+		}
+	}
+}
+
+func TestIsFilePath_rejectAbsolutePath(t *testing.T) {
+	cases := []string{
+		"/migrations",
+		"/v1/users",
+		"/contract-tests",
+	}
+	for _, s := range cases {
+		if drift.ExportIsFilePath(s) {
+			t.Errorf("isFilePath(%q) = true, абсолютный путь не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsFilePath_rejectPlaceholder(t *testing.T) {
+	cases := []string{
+		"/v1/...",
+		"a/.../b",
+		"docs/.../readme",
+	}
+	for _, s := range cases {
+		if drift.ExportIsFilePath(s) {
+			t.Errorf("isFilePath(%q) = true, плейсхолдер ... не должен матчиться", s)
+		}
+	}
+}
