@@ -21,7 +21,7 @@ func ProcessReadability(req domain.Request, deps Deps) (domain.Report, error) {
 		return domain.Report{}, err
 	}
 
-	outcome := scoreReadability(docs, cfg)
+	outcome := Evaluate(docs, cfg)
 
 	parts := domain.ReportParts{
 		Layers: []domain.LayerOutcome{outcome},

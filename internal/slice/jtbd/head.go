@@ -21,13 +21,7 @@ func ProcessJTBD(req domain.Request, deps Deps) (domain.Report, error) {
 		return domain.Report{}, err
 	}
 
-	idx := matchHeadings(docs, cfg)
-
-	consumers := cfg.JTBDSpec().Consumers()
-	jtbdByRole := make(map[string]domain.JTBDResult, len(consumers))
-	for _, consumer := range consumers {
-		jtbdByRole[consumer.Role()] = buildJTBDCard(idx, consumer)
-	}
+	jtbdByRole := Evaluate(docs, cfg)
 
 	return buildReport(target, req.Command, jtbdByRole), nil
 }

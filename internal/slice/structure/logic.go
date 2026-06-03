@@ -226,3 +226,9 @@ func buildSummary(status string, vs []domain.Violation) string {
 		return ""
 	}
 }
+
+// Evaluate — экспортная точка входа L3 для S7 assess.
+// Принимает уже прочитанную структуру репо и конфиг; возвращает LayerOutcome.
+func Evaluate(s domain.RepoStructure, cfg domain.Config) domain.LayerOutcome {
+	return checkStructure(s, cfg)
+}
