@@ -31,12 +31,16 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 ADR 0003 закрыт (E14, PR #9): словари L4, обязательные файлы L3 и манифесты L6
 вынесены из хардкода в дефолтный конфиг.
 
-Следующий — **S7 `assess`**: сборка финального пайплайна из листьев S1–S6
-(L1/L3/L4/L5/L6a), short-circuit «L4 упал → не звать дорогой L5», четыре
-независимых score + пробелы. Новых I/O нет — слайс только оркеструет уже
-существующие листья (чеклист `http-io` не нужен). По конвенции слайса голову
-`ProcessAssess` и иерархию узлов утвердить с оператором ДО кода (дизайн-карта
-`docs/design/assess/slices/07-assess.md`); реализация — Sonnet.
+Следующий — **E15** (рефактор: экспортный `Evaluate` на каждый слайс S1–S6),
+**затем S7 `assess`**. Дизайн S7 утверждён (`docs/design/assess/slices/07-assess.md`):
+**Option A** — `assess` добывает вход **1×** (`NewAuditTarget`+`NewConfig`+
+`ReadStructure`, чьи `.Docs` кормят L1/L4/L5) и зовёт пять чистых листьев
+`Evaluate`, а не пять голов (отклонённый Option B давал 5× валидацию/5× чтение).
+Голова `ProcessAssess`: acquire → `layersUpTo` (`--up-to`) → `Evaluate` по плану →
+`shortCircuit` («L4 FAIL → не звать L5») → условный L5 (LLM резолвится в голове;
+нет ключа → `llm_unavailable`, код 2) → `mergeOutcomes`. Состав v1 = L1/L3/L4/L5/L6a
+(**L2 нет** — S4 в TBD). Новых I/O нет, чеклист `http-io` не нужен. E15 — отдельным
+PR до S7; реализация обоих — Sonnet.
 
 Follow-up за S7 — **S8 `drift --semantic`** (тир L6c за флагом): `--semantic`
 решается на краю (роутер выбирает реализацию `Judge`: реальный `LLMClient` /
