@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
@@ -83,7 +84,13 @@ func renderMarkdown(r domain.Report) string {
 
 	if len(r.Layers) > 0 {
 		sb.WriteString("## Layers\n\n")
-		for k, l := range r.Layers {
+		keys := make([]string, 0, len(r.Layers))
+		for k := range r.Layers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			l := r.Layers[k]
 			sb.WriteString("### ")
 			sb.WriteString(k)
 			sb.WriteString(": ")
@@ -95,6 +102,35 @@ func renderMarkdown(r domain.Report) string {
 			if l.Summary != "" {
 				sb.WriteString(l.Summary)
 				sb.WriteString("\n\n")
+			}
+		}
+	}
+
+	if len(r.JTBD) > 0 {
+		sb.WriteString("## JTBD\n\n")
+		roles := make([]string, 0, len(r.JTBD))
+		for role := range r.JTBD {
+			roles = append(roles, role)
+		}
+		sort.Strings(roles)
+		for _, role := range roles {
+			j := r.JTBD[role]
+			sb.WriteString("### ")
+			sb.WriteString(role)
+			sb.WriteString("\n\n")
+			sb.WriteString("Status: **")
+			sb.WriteString(j.Status)
+			sb.WriteString("** | Score: ")
+			sb.WriteString(fmt.Sprintf("%d", j.Score))
+			sb.WriteString("\n\n")
+			if len(j.Gaps) > 0 {
+				sb.WriteString("Gaps:\n\n")
+				for _, g := range j.Gaps {
+					sb.WriteString("- ")
+					sb.WriteString(g)
+					sb.WriteString("\n")
+				}
+				sb.WriteString("\n")
 			}
 		}
 	}
