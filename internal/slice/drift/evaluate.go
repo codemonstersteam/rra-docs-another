@@ -9,7 +9,7 @@ import (
 // Принимает уже прочитанную структуру репо, конфиг и судью (NoopJudge или LLMClient).
 // Возвращает LayerOutcome (L6a + опциональный L6c через judge).
 func Evaluate(s domain.RepoStructure, cfg domain.Config, judge iodep.Judge) (domain.LayerOutcome, error) {
-	claims := extractClaims(s)
+	claims := extractClaims(s, cfg.LinkExtensions())
 	check := NewDriftCheck(s, claims)
 
 	l6aFindings := verifyClaims(check)

@@ -138,11 +138,12 @@ type configYAML struct {
 		MaxRetries    int    `yaml:"max_retries"`
 		MaxJudgeCalls int    `yaml:"max_judge_calls"`
 	} `yaml:"llm"`
-	Docs          []string          `yaml:"docs"`
-	RequiredFiles []string          `yaml:"required_files"`
-	Manifests     []string          `yaml:"manifests"`
-	Prompts       map[string]string `yaml:"prompts"`
-	Thresholds    struct {
+	Docs           []string          `yaml:"docs"`
+	RequiredFiles  []string          `yaml:"required_files"`
+	Manifests      []string          `yaml:"manifests"`
+	LinkExtensions []string          `yaml:"link_extensions"`
+	Prompts        map[string]string `yaml:"prompts"`
+	Thresholds     struct {
 		DriftDays      int `yaml:"drift_days"`
 		ReadabilityMin int `yaml:"readability_min"`
 	} `yaml:"thresholds"`
@@ -166,6 +167,7 @@ type Config struct {
 	docs               []string
 	requiredFiles      []string
 	manifests          []string
+	linkExtensions     []string
 	llmCallDelayMs     int
 	llmTokenBudget     int
 	llmMaxRetries      int
@@ -191,6 +193,9 @@ func (c Config) Docs() []string { return c.docs }
 
 // RequiredFiles возвращает обязательные файлы в корне репо (L3, слайс structure).
 func (c Config) RequiredFiles() []string { return c.requiredFiles }
+
+// LinkExtensions возвращает allowlist расширений файловых ссылок (L6, слайс drift).
+func (c Config) LinkExtensions() []string { return c.linkExtensions }
 
 // Manifests возвращает известные файлы-манифесты для разбора зависимостей
 // (claim-kind dependency, L6, слайс drift).
@@ -271,6 +276,9 @@ func parseConfigYAML(data []byte) (Config, error) {
 	if len(raw.Manifests) == 0 {
 		return Config{}, fmt.Errorf("%w: секция manifests пуста или отсутствует", ErrConfigInvalid)
 	}
+	if len(raw.LinkExtensions) == 0 {
+		return Config{}, fmt.Errorf("%w: секция link_extensions пуста или отсутствует", ErrConfigInvalid)
+	}
 	return Config{
 		driftThresholdDays: dt,
 		readabilityMin:     rm,
@@ -278,6 +286,7 @@ func parseConfigYAML(data []byte) (Config, error) {
 		docs:               raw.Docs,
 		requiredFiles:      raw.RequiredFiles,
 		manifests:          raw.Manifests,
+		linkExtensions:     raw.LinkExtensions,
 		llmCallDelayMs:     raw.LLM.CallDelayMs,
 		llmTokenBudget:     tb,
 		llmMaxRetries:      raw.LLM.MaxRetries,

@@ -13,7 +13,7 @@ import (
 // link: относительные пути в inline-backticks (содержат "/", без glob/схем).
 // dependency: имена модулей из go.mod, упомянутые в доках.
 // Пути внутри fenced-блоков (```) не обрабатываются — высокий шанс ложных срабатываний.
-func extractClaims(structure domain.RepoStructure) []Claim {
+func extractClaims(structure domain.RepoStructure, linkExts []string) []Claim {
 	pkgNames := goModPackages(structure.Manifests)
 	topLevel := topLevelSet(structure.Files)
 
@@ -29,7 +29,7 @@ func extractClaims(structure domain.RepoStructure) []Claim {
 			if inFenced {
 				continue
 			}
-			for _, text := range inlineBacktickPaths(line, topLevel) {
+			for _, text := range inlineBacktickPaths(line, topLevel, linkExts) {
 				claims = append(claims, Claim{
 					Kind: "link",
 					Text: text,
@@ -53,8 +53,8 @@ func extractClaims(structure domain.RepoStructure) []Claim {
 }
 
 // inlineBacktickPaths возвращает содержимое inline-backtick-кода, похожее на
-// путь внутри репо. topLevel — топ-уровневые сегменты из structure.Files.
-func inlineBacktickPaths(line string, topLevel map[string]struct{}) []string {
+// путь внутри репо. topLevel — топ-уровневые сегменты, linkExts — allowlist расширений.
+func inlineBacktickPaths(line string, topLevel map[string]struct{}, linkExts []string) []string {
 	var result []string
 	for {
 		a := strings.Index(line, "`")
@@ -67,7 +67,7 @@ func inlineBacktickPaths(line string, topLevel map[string]struct{}) []string {
 		}
 		content := line[a+1 : a+1+b]
 		line = line[a+1+b+1:]
-		if isRepoPath(content, topLevel) {
+		if isRepoPath(content, topLevel, linkExts) {
 			result = append(result, content)
 		}
 	}
@@ -75,7 +75,7 @@ func inlineBacktickPaths(line string, topLevel map[string]struct{}) []string {
 }
 
 // isFilePath — базовый синтаксический фильтр (T1-правила).
-// Reject: нет "/", "://", "@", "...", ведущий "/", ведущий "-", glob/angle-bracket.
+// Reject: нет "/", "://", "@", "...", ведущий "/", "~", "-", glob/angle-bracket.
 func isFilePath(s string) bool {
 	return s != "" &&
 		strings.Contains(s, "/") &&
@@ -83,13 +83,14 @@ func isFilePath(s string) bool {
 		!strings.Contains(s, "@") &&
 		!strings.Contains(s, "...") &&
 		!strings.HasPrefix(s, "/") &&
+		!strings.HasPrefix(s, "~") &&
 		!strings.HasPrefix(s, "-") &&
 		!strings.ContainsAny(s, "* ?<>")
 }
 
-// hasFileExtension возвращает true если последний сегмент пути содержит
-// расширение файла (.<ext>, где ext — 1–8 буквенно-цифровых символов).
-func hasFileExtension(s string) bool {
+// hasAllowedExtension возвращает true если последний сегмент пути оканчивается
+// на расширение из allowlist (регистронезависимо).
+func hasAllowedExtension(s string, exts []string) bool {
 	last := s
 	if i := strings.LastIndex(s, "/"); i >= 0 {
 		last = s[i+1:]
@@ -98,16 +99,13 @@ func hasFileExtension(s string) bool {
 	if dot < 0 || dot == len(last)-1 {
 		return false
 	}
-	ext := last[dot+1:]
-	if len(ext) == 0 || len(ext) > 8 {
-		return false
-	}
-	for _, r := range ext {
-		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
-			return false
+	ext := strings.ToLower(last[dot+1:])
+	for _, allowed := range exts {
+		if strings.ToLower(allowed) == ext {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // topLevelSet строит множество первых сегментов путей из structure.Files.
@@ -129,13 +127,13 @@ func topLevelSet(files []string) map[string]struct{} {
 
 // isRepoPath — семантический предикат: токен похож на путь внутрь этого репо.
 // Проходит T1-фильтр (isFilePath) И выполняет хотя бы одно из:
-//   - есть расширение файла (последний сегмент содержит .<ext>);
+//   - расширение последнего сегмента входит в linkExts (allowlist);
 //   - первый сегмент входит в topLevel (топ-уровень репо из structure.Files).
-func isRepoPath(s string, topLevel map[string]struct{}) bool {
+func isRepoPath(s string, topLevel map[string]struct{}, linkExts []string) bool {
 	if !isFilePath(s) {
 		return false
 	}
-	if hasFileExtension(s) {
+	if hasAllowedExtension(s, linkExts) {
 		return true
 	}
 	first := s

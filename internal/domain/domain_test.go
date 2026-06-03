@@ -86,9 +86,9 @@ func TestNewConfig_badConfig(t *testing.T) {
 // проверяющих другие части конфига (jtbd обязательна в кастомном конфиге).
 const minimalJTBDYAML = "jtbd:\n  consumers:\n    - role: maintainer\n      sections:\n        - name: архитектура\n          synonyms: [архитектура]\n          critical: true\n"
 
-// filesAndManifestsYAML — обязательные секции required_files и manifests для
-// фикстур (обе обязательны в кастомном конфиге, как и jtbd).
-const filesAndManifestsYAML = "required_files: [README.md]\nmanifests: [go.mod]\n"
+// filesAndManifestsYAML — обязательные секции required_files, manifests и
+// link_extensions для фикстур (все три обязательны в кастомном конфиге).
+const filesAndManifestsYAML = "required_files: [README.md]\nmanifests: [go.mod]\nlink_extensions: [md, go, sh]\n"
 
 // TestNewConfig_jtbdFromConfig фиксирует: словари секций L4 берутся из YAML,
 // роли не хардкодятся в Go.
@@ -120,7 +120,7 @@ func TestNewConfig_filesAndManifestsFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")
 	yaml := minimalJTBDYAML +
-		"required_files: [README.md, LICENSE]\nmanifests: [go.mod, deno.json]\n"
+		"required_files: [README.md, LICENSE]\nmanifests: [go.mod, deno.json]\nlink_extensions: [md, go]\n"
 	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -323,5 +323,40 @@ func TestNewLLMConfig_openaiNoBaseURL(t *testing.T) {
 	_, err := domain.NewLLMConfig(req, domain.Config{})
 	if !errors.Is(err, domain.ErrLLMUnavailable) {
 		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
+	}
+}
+
+// ── LinkExtensions ────────────────────────────────────────────────────────────
+
+func TestNewConfig_linkExtensionsFromDefault(t *testing.T) {
+	cfg, err := domain.NewConfig(domain.Request{})
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
+	exts := cfg.LinkExtensions()
+	if len(exts) == 0 {
+		t.Fatal("LinkExtensions() не должен быть пустым из дефолтного конфига")
+	}
+	want := map[string]bool{"md": false, "go": false, "sh": false, "yml": false}
+	for _, e := range exts {
+		want[e] = true
+	}
+	for ext, found := range want {
+		if !found {
+			t.Errorf("LinkExtensions(): ожидали расширение %q в дефолтном конфиге", ext)
+		}
+	}
+}
+
+func TestNewConfig_linkExtensionsMissing(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	yaml := minimalJTBDYAML + "required_files: [README.md]\nmanifests: [go.mod]\n"
+	if err := os.WriteFile(cfgPath, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := domain.NewConfig(domain.Request{ConfigPath: cfgPath})
+	if !errors.Is(err, domain.ErrConfigInvalid) {
+		t.Fatalf("кастомный конфиг без link_extensions: expected ErrConfigInvalid, got %v", err)
 	}
 }
