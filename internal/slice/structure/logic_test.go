@@ -75,6 +75,45 @@ func TestCheckLinksResolve_brokenLink(t *testing.T) {
 	}
 }
 
+func TestCheckLinksResolve_dirLink_pass(t *testing.T) {
+	// [component-tests/](component-tests/) — директория существует (есть файлы с префиксом).
+	s := makeStructureWithDoc(
+		"README.md",
+		[]string{"[тесты](component-tests/)"},
+		[]string{"README.md", "component-tests/steps/main_test.go", "component-tests/README.md"},
+	)
+	vs := structure.ExportCheckLinksResolve(s)
+	if len(vs) != 0 {
+		t.Fatalf("ссылка-каталог не должна быть битой, got %v", vs)
+	}
+}
+
+func TestCheckLinksResolve_dirLink_noTrailingSlash(t *testing.T) {
+	// [devlog](devlog) — без слэша, но директория есть.
+	s := makeStructureWithDoc(
+		"README.md",
+		[]string{"[devlog](devlog)"},
+		[]string{"README.md", "devlog/01-llm.md"},
+	)
+	vs := structure.ExportCheckLinksResolve(s)
+	if len(vs) != 0 {
+		t.Fatalf("ссылка-каталог без слэша не должна быть битой, got %v", vs)
+	}
+}
+
+func TestCheckLinksResolve_dirLink_notExists(t *testing.T) {
+	// Ни файла, ни каталога с таким путём нет → blocker.
+	s := makeStructureWithDoc(
+		"README.md",
+		[]string{"[пусто](no-such-dir/)"},
+		[]string{"README.md"},
+	)
+	vs := structure.ExportCheckLinksResolve(s)
+	if len(vs) == 0 {
+		t.Fatal("несуществующий каталог должен давать нарушение")
+	}
+}
+
 // ── checkDocDrift ─────────────────────────────────────────────────────────────
 
 func makeCfg(days int) domain.Config {

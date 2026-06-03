@@ -9,7 +9,19 @@ import (
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 )
 
-// ── NewAuditTarget ───────────────────────────────────────────────────────────
+// writeGitHead создаёт минимальную структуру .git/ для тестов headCommit.
+func writeGitHead(t *testing.T, root, content string) {
+	t.Helper()
+	gitDir := filepath.Join(root, ".git")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll .git: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile HEAD: %v", err)
+	}
+}
+
+// ── NewAuditTarget / headCommit ───────────────────────────────────────────────
 
 func TestNewAuditTarget_happy(t *testing.T) {
 	dir := t.TempDir()
@@ -230,6 +242,78 @@ func TestNewLLMConfig_noKey(t *testing.T) {
 	_, err := domain.NewLLMConfig(req, domain.Config{})
 	if !errors.Is(err, domain.ErrLLMUnavailable) {
 		t.Fatalf("expected ErrLLMUnavailable, got %v", err)
+	}
+}
+
+// ── headCommit (через NewAuditTarget) ─────────────────────────────────────────
+
+func TestHeadCommit_detached(t *testing.T) {
+	dir := t.TempDir()
+	const hash = "abc1234567890123456789012345678901234567"
+	writeGitHead(t, dir, hash+"\n")
+
+	target, err := domain.NewAuditTarget(domain.Request{Path: dir})
+	if err != nil {
+		t.Fatalf("NewAuditTarget: %v", err)
+	}
+	if got := target.Commit(); got != hash[:40] {
+		t.Errorf("Commit() = %q, want %q", got, hash[:40])
+	}
+}
+
+func TestHeadCommit_branchRef(t *testing.T) {
+	dir := t.TempDir()
+	const hash = "deadbeef1234567890123456789012345678abcd"
+	writeGitHead(t, dir, "ref: refs/heads/main\n")
+
+	// Создаём refs/heads/main с хэшем.
+	refsDir := filepath.Join(dir, ".git", "refs", "heads")
+	if err := os.MkdirAll(refsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(refsDir, "main"), []byte(hash+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	target, err := domain.NewAuditTarget(domain.Request{Path: dir})
+	if err != nil {
+		t.Fatalf("NewAuditTarget: %v", err)
+	}
+	if got := target.Commit(); got != hash[:40] {
+		t.Errorf("Commit() = %q, want %q (должен разыменовать ref)", got, hash[:40])
+	}
+}
+
+func TestHeadCommit_packedRef(t *testing.T) {
+	dir := t.TempDir()
+	const hash = "cafe0000000000000000000000000000000000ff"
+	writeGitHead(t, dir, "ref: refs/heads/feature\n")
+
+	// Нет loose ref — только packed-refs.
+	packed := "# pack-refs with: peeled fully-peeled sorted\n" +
+		hash + " refs/heads/feature\n"
+	if err := os.WriteFile(filepath.Join(dir, ".git", "packed-refs"), []byte(packed), 0o644); err != nil {
+		t.Fatalf("WriteFile packed-refs: %v", err)
+	}
+
+	target, err := domain.NewAuditTarget(domain.Request{Path: dir})
+	if err != nil {
+		t.Fatalf("NewAuditTarget: %v", err)
+	}
+	if got := target.Commit(); got != hash[:40] {
+		t.Errorf("Commit() = %q, want %q (из packed-refs)", got, hash[:40])
+	}
+}
+
+func TestHeadCommit_noGit(t *testing.T) {
+	dir := t.TempDir()
+	// Нет .git/ вообще → Commit() пустой, не паника.
+	target, err := domain.NewAuditTarget(domain.Request{Path: dir})
+	if err != nil {
+		t.Fatalf("NewAuditTarget: %v", err)
+	}
+	if got := target.Commit(); got != "" {
+		t.Errorf("Commit() = %q, want empty (нет .git)", got)
 	}
 }
 

@@ -41,11 +41,12 @@ func checkRequiredFiles(structure domain.RepoStructure, cfg domain.Config) []dom
 }
 
 // checkLinksResolve проверяет, что все Markdown-ссылки на локальные файлы резолвятся.
-// Failure: Violation{severity:blocker} для каждой битой ссылки.
+// Принимает файл ИЛИ директорию (ссылка-каталог валидна если в репо есть хотя бы
+// один файл с этим путём как префиксом).
+// Failure: Violation{severity:blocker} для каждой неразрешимой ссылки.
 func checkLinksResolve(structure domain.RepoStructure) []domain.Violation {
 	fileSet := make(map[string]struct{}, len(structure.Files))
 	for _, f := range structure.Files {
-		// Нормализуем путь: разделитель на '/'.
 		fileSet[filepath.ToSlash(f)] = struct{}{}
 	}
 
@@ -56,7 +57,7 @@ func checkLinksResolve(structure domain.RepoStructure) []domain.Violation {
 			links := extractLocalLinks(line)
 			for _, link := range links {
 				resolved := resolveLink(docDir, link)
-				if _, ok := fileSet[resolved]; !ok {
+				if !fileOrDirExists(resolved, fileSet) {
 					lineNum := i + 1
 					violations = append(violations, domain.Violation{
 						Code:     "broken_link",
@@ -71,6 +72,21 @@ func checkLinksResolve(structure domain.RepoStructure) []domain.Violation {
 		}
 	}
 	return violations
+}
+
+// fileOrDirExists возвращает true если resolved — известный файл или каталог
+// (хотя бы один файл в fileSet начинается с resolved+"/").
+func fileOrDirExists(resolved string, fileSet map[string]struct{}) bool {
+	if _, ok := fileSet[resolved]; ok {
+		return true
+	}
+	prefix := resolved + "/"
+	for f := range fileSet {
+		if strings.HasPrefix(f, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractLocalLinks извлекает URL из Markdown-ссылок вида [text](url).

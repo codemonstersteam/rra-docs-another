@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -86,9 +87,39 @@ func headCommit(root string) string {
 	if err != nil {
 		return ""
 	}
-	head := string(data)
-	if len(head) > 0 {
-		return head[:min(len(head), 40)]
+	head := strings.TrimSpace(string(data))
+	if strings.HasPrefix(head, "ref: ") {
+		return resolveRef(root, strings.TrimPrefix(head, "ref: "))
+	}
+	// Detached HEAD — значение уже хэш.
+	return head[:min(len(head), 40)]
+}
+
+// resolveRef разыменовывает символическую ссылку ref в хэш коммита.
+// Сначала пробует .git/<ref>, затем .git/packed-refs.
+func resolveRef(root, ref string) string {
+	path := filepath.Join(root, ".git", filepath.FromSlash(ref))
+	if data, err := os.ReadFile(path); err == nil {
+		hash := strings.TrimSpace(string(data))
+		return hash[:min(len(hash), 40)]
+	}
+	return resolvePackedRef(root, ref)
+}
+
+// resolvePackedRef ищет ref в .git/packed-refs (формат: "<hash> <ref>").
+func resolvePackedRef(root, ref string) string {
+	data, err := os.ReadFile(filepath.Join(root, ".git", "packed-refs"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) == 2 && parts[1] == ref {
+			return parts[0][:min(len(parts[0]), 40)]
+		}
 	}
 	return ""
 }
