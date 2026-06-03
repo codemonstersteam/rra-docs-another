@@ -9,6 +9,7 @@ import (
 
 	"github.com/codemonstersteam/rra-docs-another/internal/domain"
 	iodep "github.com/codemonstersteam/rra-docs-another/internal/io"
+	"github.com/codemonstersteam/rra-docs-another/internal/slice/assess"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/drift"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/fitness"
 	"github.com/codemonstersteam/rra-docs-another/internal/slice/jtbd"
@@ -20,9 +21,9 @@ import (
 // go build -ldflags "-X github.com/codemonstersteam/rra-docs-another/internal/cli.Version=v1.2.3".
 var Version = "0.0.0-dev"
 
-// subcommandsTodo — подкоманды, ещё не реализованные (S4, S7).
+// subcommandsTodo — подкоманды, ещё не реализованные (S4).
 var subcommandsTodo = []string{
-	"style", "assess",
+	"style",
 }
 
 // Run диспетчеризует args (обычно os.Args[1:]) и возвращает код возврата
@@ -49,6 +50,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runFitnessCmd(args[1:], stdout, stderr)
 	case "drift":
 		return runDriftCmd(args[1:], stdout, stderr)
+	case "assess":
+		return runAssessCmd(args[1:], stdout, stderr)
 	default:
 		if isTodoSubcommand(cmd) {
 			fmt.Fprintf(stderr, "rra-docs-another: подкоманда %q ещё не реализована (см. PLAN.md)\n", cmd)
@@ -163,6 +166,22 @@ func runDriftCmd(args []string, stdout, stderr io.Writer) int {
 	return egress(report, runErr, req, sink, stdout)
 }
 
+// runAssessCmd — точка входа подкоманды assess в CLI-роутере.
+// LLMConfig резолвится внутри ProcessAssess по ветке L5 (условный).
+func runAssessCmd(args []string, stdout, stderr io.Writer) int {
+	req, err := assess.ParseArgs(args, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "rra-docs-another assess: %v\n", err)
+		return 2
+	}
+
+	deps := assess.NewDeps()
+	sink := iodep.NewReportSink()
+
+	report, runErr := assess.ProcessAssess(req, deps)
+	return egress(report, runErr, req, sink, stdout)
+}
+
 // egress — общий выход: форматирует отчёт (успех или ошибку) и возвращает код.
 func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink, stdout io.Writer) int {
 	if err != nil {
@@ -199,6 +218,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  jtbd         L4 JTBD-присутствие")
 	fmt.Fprintln(w, "  fitness      L5 JTBD-пригодность (LLM)")
 	fmt.Fprintln(w, "  drift        L6 дрейф документации")
+	fmt.Fprintln(w, "  assess       полный аудит L1/L3/L4/L5/L6a")
 	for _, c := range subcommandsTodo {
 		fmt.Fprintf(w, "  %-12s аудит (todo)\n", c)
 	}
