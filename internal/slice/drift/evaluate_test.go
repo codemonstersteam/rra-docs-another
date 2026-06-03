@@ -76,3 +76,5 @@ type errorJudge struct{}
 func (errorJudge) Judge(_ domain.ClaimPromptSet) ([]domain.Verdict, error) {
 	return nil, domain.ErrLLMUnavailable
 }
+
+func (errorJudge) Enabled() bool { return true }

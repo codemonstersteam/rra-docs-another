@@ -14,14 +14,16 @@ func Evaluate(s domain.RepoStructure, cfg domain.Config, judge iodep.Judge) (dom
 
 	l6aFindings := verifyClaims(check)
 
-	promptSet := buildClaimPromptSet(check, cfg)
-
-	verdicts, err := judge.Judge(promptSet)
-	if err != nil {
-		return domain.LayerOutcome{}, err
+	var semFindings []DriftFinding
+	if judge.Enabled() {
+		promptSet := buildClaimPromptSet(check, cfg)
+		verdicts, err := judge.Judge(promptSet)
+		if err != nil {
+			return domain.LayerOutcome{}, err
+		}
+		semFindings = mergeSemanticFindings(verdicts)
 	}
 
-	semFindings := mergeSemanticFindings(verdicts)
 	report := NewDriftReport(l6aFindings, semFindings)
 	return buildDriftOutcome(report), nil
 }
