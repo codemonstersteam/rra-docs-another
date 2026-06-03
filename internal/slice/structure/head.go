@@ -21,7 +21,7 @@ func ProcessStructure(req domain.Request, deps Deps) (domain.Report, error) {
 		return domain.Report{}, err
 	}
 
-	outcome := checkStructure(structure, cfg)
+	outcome := Evaluate(structure, cfg)
 
 	parts := domain.ReportParts{
 		Layers: []domain.LayerOutcome{outcome},

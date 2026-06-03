@@ -106,3 +106,49 @@ func formatDocs(docs []domain.MarkdownDoc) string {
 	}
 	return sb.String()
 }
+
+// asker — минимальный интерфейс LLM-клиента для Evaluate.
+// LLMClient реализует его неявно.
+type asker interface {
+	Ask(set domain.JTBDPromptSet) ([]domain.LLMVerdict, error)
+}
+
+// filterDocsByList возвращает подмножество docs, чьи пути входят в list.
+// Если list пуст — возвращает docs без изменений.
+func filterDocsByList(docs []domain.MarkdownDoc, list []string) []domain.MarkdownDoc {
+	if len(list) == 0 {
+		return docs
+	}
+	set := make(map[string]struct{}, len(list))
+	for _, p := range list {
+		set[p] = struct{}{}
+	}
+	filtered := make([]domain.MarkdownDoc, 0, len(docs))
+	for _, doc := range docs {
+		if _, ok := set[doc.Path]; ok {
+			filtered = append(filtered, doc)
+		}
+	}
+	return filtered
+}
+
+// Evaluate — экспортная точка входа L5 для S7 assess.
+// Принимает уже прочитанные docs (полный набор), применяет in-memory фильтр
+// cfg.Docs() и вызывает LLM. Возвращает карту JTBDResult по ролям.
+func Evaluate(docs []domain.MarkdownDoc, cfg domain.Config, llm asker) (map[string]domain.JTBDResult, error) {
+	filtered := filterDocsByList(docs, cfg.Docs())
+
+	promptSet := buildJTBDPromptSet(filtered, cfg)
+
+	verdicts, err := llm.Ask(promptSet)
+	if err != nil {
+		return nil, err
+	}
+
+	results := scoreFitness(verdicts)
+	jtbdByRole := make(map[string]domain.JTBDResult, len(verdicts))
+	for i, v := range verdicts {
+		jtbdByRole[v.Consumer] = results[i]
+	}
+	return jtbdByRole, nil
+}

@@ -3,37 +3,24 @@ package fitness
 import "github.com/codemonstersteam/rra-docs-another/internal/domain"
 
 // ProcessFitness — голова слайса S5 (fitness, L5).
-// Пайп: NewAuditTarget → store.ReadMarkdownDocsByList → buildJTBDPromptSet →
-// llm.Ask → scoreFitness → buildReport. Валидация LLM-подключения (fail-fast по
-// ключу/провайдеру) выполнена при сборке Deps в роутере (domain.NewLLMConfig).
+// Пайп: NewAuditTarget → store.ReadMarkdownDocs → Evaluate → buildReport.
+// Валидация LLM-подключения (fail-fast по ключу/провайдеру) выполнена при
+// сборке Deps в роутере (domain.NewLLMConfig). Фильтр cfg.Docs() применяется
+// in-memory внутри Evaluate (один ReadMarkdownDocs на все слои).
 func ProcessFitness(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
 	if err != nil {
 		return domain.Report{}, err
 	}
 
-	var docs []domain.MarkdownDoc
-	if list := deps.Config.Docs(); len(list) > 0 {
-		docs, err = deps.Store.ReadMarkdownDocsByList(target, list)
-	} else {
-		docs, err = deps.Store.ReadMarkdownDocs(target)
-	}
+	docs, err := deps.Store.ReadMarkdownDocs(target)
 	if err != nil {
 		return domain.Report{}, err
 	}
 
-	promptSet := buildJTBDPromptSet(docs, deps.Config)
-
-	verdicts, err := deps.LLM.Ask(promptSet)
+	jtbdByRole, err := Evaluate(docs, deps.Config, deps.LLM)
 	if err != nil {
 		return domain.Report{}, err
-	}
-
-	results := scoreFitness(verdicts)
-
-	jtbdByRole := make(map[string]domain.JTBDResult, len(verdicts))
-	for i, v := range verdicts {
-		jtbdByRole[v.Consumer] = results[i]
 	}
 
 	return buildReport(target, req.Command, jtbdByRole), nil

@@ -300,3 +300,8 @@ func buildReadabilitySummary(status string, avg float64, warnings int) string {
 		return ""
 	}
 }
+
+// Evaluate — экспортная точка входа L1 для S7 assess.
+func Evaluate(docs []domain.MarkdownDoc, cfg domain.Config) domain.LayerOutcome {
+	return scoreReadability(docs, cfg)
+}

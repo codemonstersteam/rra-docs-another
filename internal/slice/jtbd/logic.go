@@ -119,3 +119,15 @@ func buildJTBDCard(idx headingIndex, consumer domain.JTBDConsumer) domain.JTBDRe
 		Gaps:   gaps,
 	}
 }
+
+// Evaluate — экспортная точка входа L4 для S7 assess.
+// Возвращает карту JTBDResult по ролям из конфига.
+func Evaluate(docs []domain.MarkdownDoc, cfg domain.Config) map[string]domain.JTBDResult {
+	idx := matchHeadings(docs, cfg)
+	consumers := cfg.JTBDSpec().Consumers()
+	result := make(map[string]domain.JTBDResult, len(consumers))
+	for _, consumer := range consumers {
+		result[consumer.Role()] = buildJTBDCard(idx, consumer)
+	}
+	return result
+}

@@ -23,21 +23,10 @@ func ProcessDrift(req domain.Request, deps Deps) (domain.Report, error) {
 		return domain.Report{}, err
 	}
 
-	claims := extractClaims(structure)
-	check := NewDriftCheck(structure, claims)
-
-	l6aFindings := verifyClaims(check)
-
-	promptSet := buildClaimPromptSet(check, cfg)
-
-	verdicts, err := deps.Judge.Judge(promptSet)
+	outcome, err := Evaluate(structure, cfg, deps.Judge)
 	if err != nil {
 		return domain.Report{}, err
 	}
-
-	semFindings := mergeSemanticFindings(verdicts)
-	report := NewDriftReport(l6aFindings, semFindings)
-	outcome := buildDriftOutcome(report)
 
 	parts := domain.ReportParts{Layers: []domain.LayerOutcome{outcome}}
 	return buildReport(parts, target, req.Command), nil
