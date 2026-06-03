@@ -60,6 +60,7 @@ func TestEvaluate_filterByDocsList(t *testing.T) {
 docs: [README.md]
 required_files: [README.md]
 manifests: [go.mod]
+link_extensions: [md, go, sh]
 thresholds:
   drift_days: 90
   readability_min: 50

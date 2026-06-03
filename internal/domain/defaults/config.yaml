@@ -97,6 +97,34 @@ manifests:
   - pyproject.toml
   - requirements.txt
 
+# link_extensions — allowlist расширений файловых ссылок в документации (слой L6,
+# слайс drift). Только токены, чей последний сегмент оканчивается на .<ext> из
+# этого списка, признаются файловыми claim-kind link. Сопоставление регистронезависимо.
+# Секция обязательна: кастомный --config без link_extensions → config_invalid.
+link_extensions:
+  - md
+  - markdown
+  - txt
+  - go
+  - mod
+  - sum
+  - sh
+  - bash
+  - yml
+  - yaml
+  - json
+  - toml
+  - feature
+  - sql
+  - proto
+  - py
+  - rs
+  - ts
+  - js
+  - tsx
+  - html
+  - css
+
 thresholds:
   drift_days: 90
   readability_min: 50

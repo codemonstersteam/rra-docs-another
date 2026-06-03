@@ -16,7 +16,7 @@ func TestExtractClaims_happy(t *testing.T) {
 		Lines: []string{"Конфигурация — `config/settings.yaml`.", "Обычный текст."},
 	}
 	s := domain.RepoStructure{Docs: []domain.MarkdownDoc{doc}}
-	claims := drift.ExportExtractClaims(s)
+	claims := drift.ExportExtractClaimsWithExts(s, defaultExts)
 	if len(claims) != 1 {
 		t.Fatalf("expected 1 claim, got %d", len(claims))
 	}
@@ -34,7 +34,7 @@ func TestExtractClaims_noUtterances(t *testing.T) {
 		Lines: []string{"Сервис `order-service` обрабатывает заказы.", "Без путей."},
 	}
 	s := domain.RepoStructure{Docs: []domain.MarkdownDoc{doc}}
-	claims := drift.ExportExtractClaims(s)
+	claims := drift.ExportExtractClaimsWithExts(s, defaultExts)
 	if len(claims) != 0 {
 		t.Fatalf("expected 0 claims, got %d: %+v", len(claims), claims)
 	}
@@ -275,24 +275,27 @@ func TestIsFilePath_rejectPlaceholder(t *testing.T) {
 	}
 }
 
-// ── hasFileExtension ──────────────────────────────────────────────────────────
+// ── hasAllowedExtension ───────────────────────────────────────────────────────
 
-func TestHasFileExtension_happy(t *testing.T) {
+var defaultExts = []string{"md", "go", "sh", "yml", "yaml", "json", "toml", "feature", "sql", "proto", "py", "rs", "ts", "js", "tsx", "html", "css", "txt", "mod", "sum", "bash", "markdown"}
+
+func TestHasAllowedExtension_happy(t *testing.T) {
 	cases := []string{
 		"docs/architecture.md",
 		"scripts/run-tests.sh",
 		"cmd/api/main.go",
 		"internal/io/repostore.go",
 		"config/settings.yaml",
+		"features/smoke.feature",
 	}
 	for _, s := range cases {
-		if !drift.ExportHasFileExtension(s) {
-			t.Errorf("hasFileExtension(%q) = false, ожидали true", s)
+		if !drift.ExportHasAllowedExtension(s, defaultExts) {
+			t.Errorf("hasAllowedExtension(%q) = false, ожидали true", s)
 		}
 	}
 }
 
-func TestHasFileExtension_noExt(t *testing.T) {
+func TestHasAllowedExtension_noExt(t *testing.T) {
 	cases := []string{
 		"docs/adr",
 		"internal/auth",
@@ -300,8 +303,21 @@ func TestHasFileExtension_noExt(t *testing.T) {
 		"github.com/user/repo",
 	}
 	for _, s := range cases {
-		if drift.ExportHasFileExtension(s) {
-			t.Errorf("hasFileExtension(%q) = true, ожидали false", s)
+		if drift.ExportHasAllowedExtension(s, defaultExts) {
+			t.Errorf("hasAllowedExtension(%q) = true, ожидали false (нет расширения)", s)
+		}
+	}
+}
+
+func TestHasAllowedExtension_rejectNotInList(t *testing.T) {
+	cases := []string{
+		"paths./users/me.get", // .get не в списке
+		"crypto/rand.Reader",  // .Reader не в списке
+		"pkg.Symbol",          // .Symbol не в списке
+	}
+	for _, s := range cases {
+		if drift.ExportHasAllowedExtension(s, defaultExts) {
+			t.Errorf("hasAllowedExtension(%q) = true, расширение не должно быть в allowlist", s)
 		}
 	}
 }
@@ -339,9 +355,10 @@ func TestIsRepoPath_byExtension(t *testing.T) {
 		"docs/architecture.md",
 		"scripts/run-tests.sh",
 		"x/y.md",
+		"features/smoke.feature",
 	}
 	for _, s := range cases {
-		if !drift.ExportIsRepoPath(s, top) {
+		if !drift.ExportIsRepoPath(s, top, defaultExts) {
 			t.Errorf("isRepoPath(%q) = false, должен матчиться по расширению", s)
 		}
 	}
@@ -355,7 +372,7 @@ func TestIsRepoPath_byTopSeg(t *testing.T) {
 		"devlog/06",
 	}
 	for _, s := range cases {
-		if !drift.ExportIsRepoPath(s, top) {
+		if !drift.ExportIsRepoPath(s, top, defaultExts) {
 			t.Errorf("isRepoPath(%q) = false, должен матчиться по top-seg", s)
 		}
 	}
@@ -370,7 +387,7 @@ func TestIsRepoPath_rejectImportPath(t *testing.T) {
 		"mattn/go-sqlite3",
 	}
 	for _, s := range cases {
-		if drift.ExportIsRepoPath(s, top) {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
 			t.Errorf("isRepoPath(%q) = true, import-path не должен матчиться", s)
 		}
 	}
@@ -378,7 +395,7 @@ func TestIsRepoPath_rejectImportPath(t *testing.T) {
 
 func TestIsRepoPath_rejectMIME(t *testing.T) {
 	top := makeTopLevel("internal/auth/service.go")
-	if drift.ExportIsRepoPath("application/json", top) {
+	if drift.ExportIsRepoPath("application/json", top, defaultExts) {
 		t.Error("isRepoPath(application/json) = true, MIME не должен матчиться")
 	}
 }
@@ -390,7 +407,7 @@ func TestIsRepoPath_rejectBranchName(t *testing.T) {
 		"feat/new-feature",
 	}
 	for _, s := range cases {
-		if drift.ExportIsRepoPath(s, top) {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
 			t.Errorf("isRepoPath(%q) = true, имя ветки не должно матчиться", s)
 		}
 	}
@@ -403,16 +420,70 @@ func TestIsRepoPath_rejectExternalOrgRepo(t *testing.T) {
 		"codemonstersteam/rra-docs",
 	}
 	for _, s := range cases {
-		if drift.ExportIsRepoPath(s, top) {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
 			t.Errorf("isRepoPath(%q) = true, внешний org/repo не должен матчиться", s)
 		}
 	}
 }
 
 func TestIsRepoPath_boundaryTopSegNoExt(t *testing.T) {
-	// docs/adr: нет расширения, но top-seg "docs" есть → claim.
 	top := makeTopLevel("docs/architecture.md", "README.md")
-	if !drift.ExportIsRepoPath("docs/adr", top) {
+	if !drift.ExportIsRepoPath("docs/adr", top, defaultExts) {
 		t.Error("isRepoPath(docs/adr) = false, top-seg docs есть → должен быть claim")
+	}
+}
+
+// ── T1c: новые reject-классы ──────────────────────────────────────────────────
+
+func TestIsFilePath_rejectTilde(t *testing.T) {
+	cases := []string{
+		"~/IdeaProjects/web-book/docs/guide.md",
+		"~/work/repo/README.md",
+	}
+	for _, s := range cases {
+		if drift.ExportIsFilePath(s) {
+			t.Errorf("isFilePath(%q) = true, ~ не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectOpenAPIPathPointer(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"paths./sessions/{id}/assertion.post",
+		"paths./users/me.get",
+		"paths./auth/refresh.delete",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
+			t.Errorf("isRepoPath(%q) = true, OpenAPI path-pointer не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectGoSymbol(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"crypto/rand.Reader",
+		"crypto/rand.Read",
+		"net/http.DefaultClient",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
+			t.Errorf("isRepoPath(%q) = true, Go-символ pkg.Symbol не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectTildeAbsolute(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"~/IdeaProjects/web-book/docs/guide.md",
+		"~/work/repo/README.md",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top, defaultExts) {
+			t.Errorf("isRepoPath(%q) = true, ~ абсолют не должен матчиться", s)
+		}
 	}
 }
