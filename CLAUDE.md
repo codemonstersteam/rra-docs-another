@@ -23,26 +23,25 @@ Go (CLI), Vale/markdownlint (L2), Anthropic API (L5/L6c). Концепция —
 
 ## Следующий шаг
 
-**S4 `style` (L2) отложен в TBD** — внешние тулзы (Vale/markdownlint) не тянем,
-состав L2 проектируем отдельно и научно (см. `backlog.md` → «Где мы сейчас»).
-
 Влиты **все семь основных слайсов**: S1–S3 (L3, L1, L4), S5 `fitness` (L5, LLM),
 S6 `drift` (L6a) и **S7 `assess`** (полный пайплайн L1/L3/L4/L5/L6a, Option A —
 одна добыча входа + листья `Evaluate`; PR #13). Предусловие **E15** (экспортный
 `Evaluate` на каждый слайс, PR #12) и конформанс с ADR 0003 (E14, PR #9) закрыты.
+**E16 закрыт** — пять дефектов с первого аудита внешнего репо `ubik-life/passkey-demo-api`
+исправлены (PR #15/#19/#20/#21/#22): `target.commit` = реальный SHA, L3 не репортит
+каталоги битыми, точность L6a (`doc_drift` 194→56, allowlist `link_extensions` в
+конфиге), drift не строит промпты при `NoopJudge`, md рендерит `jtbd`.
 
-Следующий — **E16**: баг-фиксы корректности отчёта, найденные при первом прогоне
-тула на внешнем репо `ubik-life/passkey-demo-api`. Приоритет — два бага корректности
-**первым PR** (до S8/S4): `target.commit` отдаёт сырой `.git/HEAD` вместо хэша;
-`broken_link` ложно срабатывает на ссылки-каталоги (ложный `fail`/код 1). Чистка
-(drift строит промпты при `NoopJudge`; md без `jtbd`) — отдельным PR ниже. Состав
-пайплайна v1 = L1/L3/L4/L5/L6a (**L2 нет** — S4 в TBD). См. `backlog.md` → E16.
+**Открытой работы — две, обе опциональны** (состав пайплайна v1 = L1/L3/L4/L5/L6a,
+**L2 нет**):
 
-Follow-up за S7 — **S8 `drift --semantic`** (тир L6c за флагом): `--semantic`
-решается на краю (роутер выбирает реализацию `Judge`: реальный `LLMClient` /
-`NoopJudge`), не ветвит голову `ProcessDrift`; перед S8 chore-PR — промоут
-`LLMClient` `fitness/io.go` → `internal/io` (+ `Judge`); затем L6c по
-`08-drift-semantic.md` и skill `http-io`.
+- **S4 `style` (L2) — отложен в TBD.** Внешние тулзы (Vale/markdownlint) не тянем;
+  состав L2 проектируем отдельно и научно от JTBD. До этого S4 не стартует.
+- **S8 `drift --semantic`** (тир L6c за флагом): `--semantic` решается на краю
+  (роутер выбирает реализацию `Judge`: реальный `LLMClient` / `NoopJudge`), не
+  ветвит голову `ProcessDrift`; перед S8 chore-PR — промоут `LLMClient`
+  `fitness/io.go` → `internal/io` (+ `Judge`); затем L6c по `08-drift-semantic.md`
+  и skill `http-io`.
 
 Конвенция слайса (как в `ubik/passkey-demo-api`, см. `infrastructure.md`):
 самодостаточный пакет `internal/slice/<name>/` — `head.go` (`Process<Slice>` —
