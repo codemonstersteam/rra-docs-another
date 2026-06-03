@@ -301,6 +301,59 @@ blocker'ы → неверный `fail`/код 1). На `passkey-demo-api` L6 = `
 повторный прогон `assess /tmp/passkey-demo-api`: число `doc_drift` падает за счёт
 ложных, реальные (`docs/architecture.md`, `docs/adr`) сохраняются.
 
+### Тикеты E16 (декомпозиция для Sonnet)
+
+Контракт (`report.schema.json`, `cli.md`) не меняется — это баг-фиксы поведения.
+План PR: **T1 первым** (корректность), затем T2+T3 (можно одним cleanup-PR).
+
+#### E16-T1 — fix: точность `extractClaims` (#5) · приоритет
+
+**Спецификация:** E16 #5 (выше). **Ветка:** `fix/extractclaims-precision`.
+
+- [ ] `internal/slice/drift/logic.go` — расширить чистый предикат `isFilePath`:
+  дополнительно возвращать `false`, если строка содержит `@` (git-remote/e-mail),
+  содержит `...` (плейсхолдер), начинается с `/` (filesystem-абсолют). Опционально:
+  host-подобные `<seg>.<tld>/…`. Реальные пути (`docs/adr`, `docs/architecture.md`,
+  `internal/io/repostore.go`) остаются валидными.
+- [ ] `internal/slice/drift/logic_test.go` — юниты по формуле: 1 happy + ветки на
+  каждый новый reject-класс (`git@github.com:ubik-life/x.git`, `/v1/...`,
+  `/migrations`) + позитивные кейсы реальных путей (не должны отбрасываться).
+- [ ] компонентные drift-тесты зелёные **без правок** `.feature` (предикат —
+  юнит-уровень, не новая контракт-ветка → новый сценарий не нужен; правило
+  различимости `skills/component-tests`).
+- [ ] локальный CI зелёный (`gofmt -l .` → `go vet ./...` → `go test ./...` →
+  `run-tests.sh`).
+- [ ] ручная верификация: `assess <путь-к-passkey-demo-api>` — `doc_drift` падает
+  за счёт ложных (`git@…`, `/v1/...`, `ubik-life/concept` уходят), реальные
+  (`docs/architecture.md`, `docs/adr`) сохраняются.
+
+#### E16-T2 — chore: drift не строит claim-промпты при `NoopJudge` (#3)
+
+**Спецификация:** E16 #3. **Ветка:** `chore/drift-skip-noop-judge`.
+
+- [ ] `internal/io/judge.go` — добавить в интерфейс `Judge` метод `Enabled() bool`;
+  `NoopJudge.Enabled()` → `false` (null-object). (Альтернатива: type-assert
+  `NoopJudge` в `Evaluate` — допустима, но `Enabled()` чище.)
+- [ ] `internal/slice/drift/evaluate.go` — если `!judge.Enabled()`: пропустить
+  `buildClaimPromptSet` и `judge.Judge` (semantic-находки пусты, как и сейчас).
+- [ ] WARN `buildClaimPromptSet: обрезка до max_judge_calls` больше не появляется
+  на дефолтном `assess`/`drift` (без `--semantic`) — проверить прогоном.
+- [ ] вывод не меняется (с `NoopJudge` semantic и так был пуст) → компонентные
+  drift-тесты зелёные без правок; локальный CI зелёный.
+
+#### E16-T3 — fix: `--format md` рендерит секцию `jtbd` (#4)
+
+**Спецификация:** E16 #4. **Ветка:** `fix/md-render-jtbd`.
+
+- [ ] `internal/io/reportsink.go` — в `renderMarkdown` добавить секцию `## JTBD`:
+  по каждому потребителю (`maintainer`/`consumer`/`manager`/`agent`) — `status`,
+  `score`, список `gaps`. Опц.: стабилизировать порядок `Layers`/`JTBD`
+  (сейчас итерация по map недетерминирована).
+- [ ] юнит на `renderMarkdown` (чистая функция форматирования, юнит-уровень — см.
+  E1.1): отчёт с заполненным `JTBD` → markdown содержит секцию и четыре потребителя.
+- [ ] ручная проверка: `assess --format md` показывает четыре JTBD-score; локальный
+  CI зелёный.
+
 ---
 
 ## Принципы работы с backlog
