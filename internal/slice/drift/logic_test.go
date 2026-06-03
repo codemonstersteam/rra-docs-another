@@ -274,3 +274,145 @@ func TestIsFilePath_rejectPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// ── hasFileExtension ──────────────────────────────────────────────────────────
+
+func TestHasFileExtension_happy(t *testing.T) {
+	cases := []string{
+		"docs/architecture.md",
+		"scripts/run-tests.sh",
+		"cmd/api/main.go",
+		"internal/io/repostore.go",
+		"config/settings.yaml",
+	}
+	for _, s := range cases {
+		if !drift.ExportHasFileExtension(s) {
+			t.Errorf("hasFileExtension(%q) = false, ожидали true", s)
+		}
+	}
+}
+
+func TestHasFileExtension_noExt(t *testing.T) {
+	cases := []string{
+		"docs/adr",
+		"internal/auth",
+		"devlog/06",
+		"github.com/user/repo",
+	}
+	for _, s := range cases {
+		if drift.ExportHasFileExtension(s) {
+			t.Errorf("hasFileExtension(%q) = true, ожидали false", s)
+		}
+	}
+}
+
+// ── topLevelSet ───────────────────────────────────────────────────────────────
+
+func TestTopLevelSet_happy(t *testing.T) {
+	files := []string{
+		"README.md",
+		"docs/architecture.md",
+		"docs/adr/001.md",
+		"internal/auth/service.go",
+		"cmd/api/main.go",
+	}
+	set := drift.ExportTopLevelSet(files)
+	for _, want := range []string{"README.md", "docs", "internal", "cmd"} {
+		if _, ok := set[want]; !ok {
+			t.Errorf("topLevelSet: ожидали %q в множестве, не нашли", want)
+		}
+	}
+	if _, ok := set["github.com"]; ok {
+		t.Error("topLevelSet: github.com не должен быть в множестве")
+	}
+}
+
+// ── isRepoPath ────────────────────────────────────────────────────────────────
+
+func makeTopLevel(files ...string) map[string]struct{} {
+	return drift.ExportTopLevelSet(files)
+}
+
+func TestIsRepoPath_byExtension(t *testing.T) {
+	top := makeTopLevel("README.md") // минимальный набор
+	cases := []string{
+		"docs/architecture.md",
+		"scripts/run-tests.sh",
+		"x/y.md",
+	}
+	for _, s := range cases {
+		if !drift.ExportIsRepoPath(s, top) {
+			t.Errorf("isRepoPath(%q) = false, должен матчиться по расширению", s)
+		}
+	}
+}
+
+func TestIsRepoPath_byTopSeg(t *testing.T) {
+	top := makeTopLevel("docs/architecture.md", "internal/auth/service.go", "devlog/01.md")
+	cases := []string{
+		"docs/adr",
+		"internal/auth",
+		"devlog/06",
+	}
+	for _, s := range cases {
+		if !drift.ExportIsRepoPath(s, top) {
+			t.Errorf("isRepoPath(%q) = false, должен матчиться по top-seg", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectImportPath(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"github.com/golang-jwt/jwt/v5",
+		"github.com/descope/virtualwebauthn",
+		"crypto/rand",
+		"mattn/go-sqlite3",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top) {
+			t.Errorf("isRepoPath(%q) = true, import-path не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectMIME(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	if drift.ExportIsRepoPath("application/json", top) {
+		t.Error("isRepoPath(application/json) = true, MIME не должен матчиться")
+	}
+}
+
+func TestIsRepoPath_rejectBranchName(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"refactor/s1-s2-store",
+		"feat/new-feature",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top) {
+			t.Errorf("isRepoPath(%q) = true, имя ветки не должно матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_rejectExternalOrgRepo(t *testing.T) {
+	top := makeTopLevel("internal/auth/service.go")
+	cases := []string{
+		"ubik-life/concept",
+		"codemonstersteam/rra-docs",
+	}
+	for _, s := range cases {
+		if drift.ExportIsRepoPath(s, top) {
+			t.Errorf("isRepoPath(%q) = true, внешний org/repo не должен матчиться", s)
+		}
+	}
+}
+
+func TestIsRepoPath_boundaryTopSegNoExt(t *testing.T) {
+	// docs/adr: нет расширения, но top-seg "docs" есть → claim.
+	top := makeTopLevel("docs/architecture.md", "README.md")
+	if !drift.ExportIsRepoPath("docs/adr", top) {
+		t.Error("isRepoPath(docs/adr) = false, top-seg docs есть → должен быть claim")
+	}
+}
