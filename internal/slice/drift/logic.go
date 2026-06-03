@@ -15,6 +15,7 @@ import (
 // Пути внутри fenced-блоков (```) не обрабатываются — высокий шанс ложных срабатываний.
 func extractClaims(structure domain.RepoStructure) []Claim {
 	pkgNames := goModPackages(structure.Manifests)
+	topLevel := topLevelSet(structure.Files)
 
 	var claims []Claim
 	for _, doc := range structure.Docs {
@@ -28,7 +29,7 @@ func extractClaims(structure domain.RepoStructure) []Claim {
 			if inFenced {
 				continue
 			}
-			for _, text := range inlineBacktickPaths(line) {
+			for _, text := range inlineBacktickPaths(line, topLevel) {
 				claims = append(claims, Claim{
 					Kind: "link",
 					Text: text,
@@ -51,8 +52,9 @@ func extractClaims(structure domain.RepoStructure) []Claim {
 	return claims
 }
 
-// inlineBacktickPaths возвращает содержимое inline-backtick-кода, похожее на пути.
-func inlineBacktickPaths(line string) []string {
+// inlineBacktickPaths возвращает содержимое inline-backtick-кода, похожее на
+// путь внутри репо. topLevel — топ-уровневые сегменты из structure.Files.
+func inlineBacktickPaths(line string, topLevel map[string]struct{}) []string {
 	var result []string
 	for {
 		a := strings.Index(line, "`")
@@ -65,21 +67,15 @@ func inlineBacktickPaths(line string) []string {
 		}
 		content := line[a+1 : a+1+b]
 		line = line[a+1+b+1:]
-		if isFilePath(content) {
+		if isRepoPath(content, topLevel) {
 			result = append(result, content)
 		}
 	}
 	return result
 }
 
-// isFilePath — истинно для строк, похожих на относительный путь к файлу.
-// Reject-классы (ложные срабатывания на реальных репо):
-//   - нет "/" — не путь;
-//   - "://" — URL со схемой;
-//   - "@" — git-remote (git@github.com:…) или e-mail;
-//   - "..." — плейсхолдер (/v1/...);
-//   - начинается с "/" — filesystem-абсолют (API-роут или концепт, не файл репо);
-//   - начинается с "-" или содержит glob/angle-bracket.
+// isFilePath — базовый синтаксический фильтр (T1-правила).
+// Reject: нет "/", "://", "@", "...", ведущий "/", ведущий "-", glob/angle-bracket.
 func isFilePath(s string) bool {
 	return s != "" &&
 		strings.Contains(s, "/") &&
@@ -89,6 +85,65 @@ func isFilePath(s string) bool {
 		!strings.HasPrefix(s, "/") &&
 		!strings.HasPrefix(s, "-") &&
 		!strings.ContainsAny(s, "* ?<>")
+}
+
+// hasFileExtension возвращает true если последний сегмент пути содержит
+// расширение файла (.<ext>, где ext — 1–8 буквенно-цифровых символов).
+func hasFileExtension(s string) bool {
+	last := s
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		last = s[i+1:]
+	}
+	dot := strings.LastIndex(last, ".")
+	if dot < 0 || dot == len(last)-1 {
+		return false
+	}
+	ext := last[dot+1:]
+	if len(ext) == 0 || len(ext) > 8 {
+		return false
+	}
+	for _, r := range ext {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// topLevelSet строит множество первых сегментов путей из structure.Files.
+// Используется для проверки «первый сегмент токена = реальный каталог/файл репо».
+func topLevelSet(files []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(files))
+	for _, f := range files {
+		norm := filepath.ToSlash(f)
+		seg := norm
+		if i := strings.Index(norm, "/"); i >= 0 {
+			seg = norm[:i]
+		}
+		if seg != "" {
+			set[seg] = struct{}{}
+		}
+	}
+	return set
+}
+
+// isRepoPath — семантический предикат: токен похож на путь внутрь этого репо.
+// Проходит T1-фильтр (isFilePath) И выполняет хотя бы одно из:
+//   - есть расширение файла (последний сегмент содержит .<ext>);
+//   - первый сегмент входит в topLevel (топ-уровень репо из structure.Files).
+func isRepoPath(s string, topLevel map[string]struct{}) bool {
+	if !isFilePath(s) {
+		return false
+	}
+	if hasFileExtension(s) {
+		return true
+	}
+	first := s
+	if i := strings.Index(s, "/"); i >= 0 {
+		first = s[:i]
+	}
+	_, ok := topLevel[first]
+	return ok
 }
 
 // goModPackages извлекает имена модулей из go.mod-манифеста в структуре репо.
