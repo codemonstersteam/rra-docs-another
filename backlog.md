@@ -64,7 +64,7 @@ Out of scope:
 | S4 | `style` | `style` | L2 | (TBD) | 🧪 **TBD — дизайн отложен** |
 | S5 | `jtbd-fitness` | `fitness` | L5 | LLMClient + YAML-конфиг | ✅ done (main) |
 | S6 | `drift` | `drift` | L6a | — | ✅ done (main) |
-| **S7** | **`assess`** | **`assess`** | **L1–L6** | **—** | **⬅️ NEXT** |
+| **S7** | **`assess`** | **`assess`** | **L1–L6** | **—** | **⬅️ NEXT (после E15)** |
 | S8 | `drift --semantic` | (флаг S6) | L6c | LLMClient.Judge | ⏸ follow-up, дизайн утверждён |
 
 LLM появляется только в базовом S5 и опциональном позднем S8. S6 детерминированный
@@ -78,10 +78,13 @@ LLM появляется только в базовом S5 и опциональ
 **S4 `style` (L2) — отложен в TBD.** Внешние тулзы не тянем; состав L2
 проектируем отдельно от JTBD. До этого S4 не стартует.
 
-**Следующий шаг — S7 `assess`** (сборка пайплайна из листьев S1–S6,
-short-circuit «L4 упал → не звать LLM», четыре независимых score).
-E12 (изолированные фикстуры), E13 (определение «локального CI») и E14
-(вынос хардкода проверок в конфиг, ADR 0003) — ✅ закрыты. S7 `assess` разблокирован.
+**Следующий шаг — E15** (рефактор: экспортный `Evaluate` на слайс), **затем S7
+`assess`** (сборка пайплайна из листьев S1–S6 единым проходом, short-circuit
+«L4 упал → не звать LLM», четыре независимых score). E15 — предусловие S7:
+`assess` зовёт листья поверх **одного** чтения репы (Option A), а не пять голов
+(Option B давал 5× валидация / 5× чтение). E12 (изолированные фикстуры), E13
+(определение «локального CI») и E14 (хардкод проверок → конфиг, ADR 0003) —
+✅ закрыты. Дизайн S7 — `docs/design/assess/slices/07-assess.md`.
 
 ## E10. Эталонные фикстуры
 
@@ -191,6 +194,47 @@ value-object'ы; голова слайса достаёт срез из `Config`
 
 Поведение по умолчанию (встроенный конфиг) сохранено — контракт не менялся,
 компонентные тесты зелёные.
+
+## E15. Рефактор — экспортный `Evaluate` на слайс (предусловие S7)
+
+**Статус: ⬅️ NEXT (перед S7).** S7 `assess` собирает аудит из листьев S1–S6 за
+**один** проход. Чтобы не дублировать добычу входа (`NewAuditTarget` + `NewConfig` +
+чтение репы) на каждый слой, каждый слайс выставляет один экспортный вход «оценка
+слоя поверх уже прочитанных данных», а его голова делегирует туда же. Это Option A
+из обсуждения дизайна S7 (Option B — «assess зовёт пять голов» — отклонён: давал
+5× валидацию и 5× чтение ФС на каждом прогоне; см. `07-assess.md`).
+
+**Ключ:** `RepoStore.ReadStructure` уже возвращает `RepoStructure{Files, Docs,
+Manifests, MTimes}`, где `Docs` = те же `[]MarkdownDoc`, что отдаёт
+`ReadMarkdownDocs`. Значит одного чтения хватает всем пяти слоям → в `assess`
+валидация и чтение по **1×**.
+
+**Scope (слайсы S1–S6; поведение голов и отчётов неизменно):**
+
+- `structure.Evaluate(s RepoStructure, cfg Config) LayerOutcome` (= `checkStructure`).
+- `readability.Evaluate(docs []MarkdownDoc, cfg Config) LayerOutcome` (= `scoreReadability`).
+- `jtbd.Evaluate(docs []MarkdownDoc, cfg Config) map[string]JTBDResult`
+  (`matchHeadings` + `buildJTBDCard`×N).
+- `fitness.Evaluate(docs []MarkdownDoc, cfg Config, llm LLMClient) (map[string]JTBDResult, error)`
+  (`buildJTBDPromptSet` → `Ask` → `scoreFitness`). Фильтр `cfg.Docs()` становится
+  **in-memory** по `docs` (заменяет отдельное чтение `ReadMarkdownDocsByList`; голова
+  fitness сводится к одному `ReadMarkdownDocs` + фильтр в `Evaluate`).
+- `drift.Evaluate(s RepoStructure, cfg Config, judge Judge) (LayerOutcome, error)`
+  (`extractClaims` → `verifyClaims` → `buildClaimPromptSet` → `judge` →
+  `mergeSemanticFindings` → `buildDriftOutcome`).
+- Голова каждого слайса: acquire (`NewAuditTarget` + `NewConfig` + `Read`) →
+  `Evaluate` → `buildReport`. Сигнатуры голов/`Deps` снаружи не меняются.
+
+**DoD:**
+
+- Каждый `Evaluate` покрыт юнит-тестами по формуле (happy + ветки); новая логика
+  (in-memory фильтр `cfg.Docs()` в `fitness.Evaluate`) — отдельными ветками.
+- Голова делегирует в `Evaluate`; поведение не меняется → компонентные тесты всех
+  слайсов зелёные **без правок** `.feature`.
+- Локальный CI зелёный (`gofmt -l .` → `go vet ./...` → `go test ./...` →
+  `run-tests.sh`).
+
+**Порядок:** отдельным PR **перед** реализацией `07-assess.md`.
 
 ---
 
