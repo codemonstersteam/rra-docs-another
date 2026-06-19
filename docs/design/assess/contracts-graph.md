@@ -77,9 +77,9 @@ parseStructureArgs --Request--> runStructure
   | layersUpTo(Request) -> LayerPlan
   | store.ReadStructure -> RepoStructure ; store.ReadMarkdownDocs -> []MarkdownDoc
   | [листья S1–S6] -> LayerOutcome (L1,L2,L3,L6a) + []JTBDResult (L4)
-  | shortCircuit([]JTBDResult) -> bool
+  | hasDocs([]MarkdownDoc) -> bool                      # гейт запуска L5
   | [L5] buildJTBDPromptSet ⨾ llm.Simulate ⨾ scoreFitness -> []JTBDResult
-  | buildReport({Layers,JTBD}) -> Report
+  | mergeOutcomes(layerOutcomes{...,l4,l5,...}) -> Report  # jtbd=L5??L4 + кэп L5 по L4 (FAIL→PARTIAL)
 ```
 
 ## 9.3. Чек-лист сверки (по всем стрелкам)
@@ -90,6 +90,9 @@ parseStructureArgs --Request--> runStructure
    - `NewAuditTarget` гарантирует читаемую директорию ⊇ предусловие `store.Read*`.
    - `store.Read*` отдаёт `RepoStructure`/`[]MarkdownDoc` ⊇ вход чистых листьев.
    - `llm.Simulate` отдаёт `[]LLMVerdict` ⊇ вход `scoreFitness`.
+   - `s.Docs` (`[]MarkdownDoc`) ⊇ вход `hasDocs`; гейт `bool` управляет веткой L5.
+   - L4+L5 (`jtbd.Evaluate`/`fitness.Evaluate`) кладутся в агрегатор `layerOutcomes`
+     → один вход `mergeOutcomes`; кэп `capL5ByL4` — приватный лист merge, не узел графа.
    - `extractClaims`+`structure` → `NewDriftCheck` → ровно вход `verifyClaims`.
 4. **Типы ошибок согласованы:** все I/O возвращают sentinel из `messages.md`;
    egress (`buildErrorReport`) разбирает все восемь через `errors.Is`. Несвязанных
@@ -97,10 +100,12 @@ parseStructureArgs --Request--> runStructure
 5. **Покрытие Gherkin:** каждый Then каждого `.feature` привязан к узлу графа или
    маппингу egress (таблицы `## Gherkin-mapping` в карточках). Узлов без Then нет;
    Then без узла нет.
-6. **Один data-аргумент на узел:** проверено. Места слияния разнесены конструкторами:
-   `NewDriftCheck` + `NewDriftReport` (S6, второй склеивает L6a+L6c-находки вместо
-   ветки `if --semantic`), `JTBDPromptSet`/`ClaimPromptSet`/`ReportParts` (сборочные
-   DTO). Сырых `*sql.DB`/`*http.Client`/`*exec.Cmd` в `Dependencies:`/`Deps` нет.
+6. **Один data-аргумент на узел:** проверено. Места слияния разнесены конструкторами/
+   агрегаторами: `NewDriftCheck` + `NewDriftReport` (S6, второй склеивает L6a+L6c-находки
+   вместо ветки `if --semantic`), `JTBDPromptSet`/`ClaimPromptSet`/`ReportParts` (сборочные
+   DTO), `layerOutcomes` (S7-агрегатор: слияние L4+L5 с кэпом `capL5ByL4` идёт внутри
+   `mergeOutcomes`, отдельного двухаргументного узла нет). Сырых
+   `*sql.DB`/`*http.Client`/`*exec.Cmd` в `Dependencies:`/`Deps` нет.
    Зависимость `Judge` — интерфейс (реальная/null-object), решение `--semantic` на краю.
 
 ## 9.4. Отметки
