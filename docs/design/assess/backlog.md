@@ -139,7 +139,7 @@
   зелёные. **Продуктовый критерий:** `assess` на `repo-good` — четыре PASS; на
   `repo-bad` — конкретные пробелы с `file:line` ещё до LLM.
 
-### TICKET S7-soften — смягчение гейта L5 (hasDocs + cap статикой)
+### TICKET S7-soften — смягчение гейта L5 (hasDocs + cap статикой) — ✅ done (Фаза 2)
 - Спека: `slices/07-assess.md` (обновлена) + ADR `docs/adr/0004-soften-l5-gate.md`.
   Зависимости: **S7 в main**. Ветка `feat/slice-assess-soften-l5`.
 - Суть: гейт L5 — `hasDocs(s.Docs)` вместо `!shortCircuit(L4)`; `FAIL` на L4 не
@@ -165,6 +165,10 @@
 - **DoD:** локальный CI зелёный (gofmt/vet/unit/component); `shortCircuit` удалён из
   кода и графа; grep-самопроверки дисциплины чисты; `backlog.md`/`devlog.md`/
   корневой `CLAUDE.md`+`backlog.md` обновлены.
+- **Итог:** `shortCircuit` удалён; `hasDocs`/`capL5ByL4` реализованы; фикстура
+  `repo-soft` (maintainer/consumer/manager PASS, agent FAIL на L4); локальный CI —
+  4/4 зелёные; компонентные сценарии assess зелёные (`repo-soft` → agent PARTIAL,
+  код 0; `repo-bad`/`bad_repo` → код 1).
 
 ### TICKET S8 — drift --semantic (ПОЗДНИЙ, опциональный)
 - Спека: `slices/08-drift-semantic.md` (эскиз). Зависимости: S6 + S5 (LLMClient).

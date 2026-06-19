@@ -11,7 +11,8 @@ import (
 
 // ProcessAssess — голова-интегратор слайса S7 (assess).
 // Пайп: NewAuditTarget → NewConfig → ReadStructure (1×) → layersUpTo →
-// листья Evaluate по плану → shortCircuit → условный L5 → mergeOutcomes.
+// листья Evaluate по плану → hasDocs-гейт → условный L5 → mergeOutcomes
+// (кэп L5 статикой L4).
 // LLMConfig резолвится в голове по ветке L5 (нет ключа → ErrLLMUnavailable → код 2).
 func ProcessAssess(req domain.Request, deps Deps) (domain.Report, error) {
 	target, err := domain.NewAuditTarget(req)
@@ -47,7 +48,7 @@ func ProcessAssess(req domain.Request, deps Deps) (domain.Report, error) {
 			return domain.Report{}, err
 		}
 	}
-	if plan.L5 && !shortCircuit(out.l4) {
+	if plan.L5 && hasDocs(s.Docs) {
 		llmCfg, llmErr := domain.NewLLMConfig(req, cfg)
 		if llmErr != nil {
 			return domain.Report{}, llmErr
