@@ -11,7 +11,7 @@
 | S4 | CLI | `rra-docs-another style <path>` | style | L2 | LinterRunner | `aggregateFindings` |
 | S5 | CLI | `rra-docs-another fitness <path>` | fitness | L5 | LLMClient | `buildJTBDPrompt`, `scoreFitness` |
 | S6 | CLI | `rra-docs-another drift <path>` | drift | L6a | — | `extractClaims`, `verifyAgainstRepo` |
-| S7 | CLI | `rra-docs-another assess <path>` | assess | L1–L6 | — | `shortCircuit`, `mergeReport` |
+| S7 | CLI | `rra-docs-another assess <path>` | assess | L1–L6 | — | `hasDocs`, `mergeOutcomes` (+ кэп `capL5ByL4`) |
 | S8 | CLI | `rra-docs-another drift <path> --semantic` | drift+ | L6c | LLMClient | `buildClaimPrompt`, `judgePair` |
 
 ## Зависимости между слайсами
@@ -23,7 +23,8 @@
 - S4 добавляет `LinterRunner`.
 - S5 добавляет `LLMClient` (единственный базовый LLM-слайс).
 - S7 собирает пайплайн из **уже протестированных листьев** S1–S6 (не вызывает
-  головы других слайсов), реализует short-circuit и правило «четыре score».
+  головы других слайсов), реализует гейт L5 `hasDocs` (статика не блокирует ИИ, а
+  кэпит итог через `capL5ByL4`) и правило «четыре score».
 - S8 — поздний, расширяет S6 семантическим тиром за флагом.
 
 ## Общая форма slice'а (CLI)

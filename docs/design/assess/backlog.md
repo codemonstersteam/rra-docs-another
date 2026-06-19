@@ -26,7 +26,7 @@
 - [x] **В таблицах юнит-тестов нет голов, I/O-модулей и ингресс-адаптеров (трубы — только компонентные сценарии)**
 - [x] `infrastructure.md` — CLI-роутер + общий egress + I/O-объекты
 - [x] `backlog.md` — тикеты по одному на slice, с зависимостями
-- [x] Оператор аппрувит пакет — @maxmorev, 2026-05-27
+- [x] Оператор аппрувит пакет — @maxmorev, 2026-06-19
 
 ## Тикеты
 
@@ -138,6 +138,33 @@
   правило «четыре score, не усредняем»; `--up-to`; `@wip` снят с `assess.feature`;
   зелёные. **Продуктовый критерий:** `assess` на `repo-good` — четыре PASS; на
   `repo-bad` — конкретные пробелы с `file:line` ещё до LLM.
+
+### TICKET S7-soften — смягчение гейта L5 (hasDocs + cap статикой)
+- Спека: `slices/07-assess.md` (обновлена) + ADR `docs/adr/0004-soften-l5-gate.md`.
+  Зависимости: **S7 в main**. Ветка `feat/slice-assess-soften-l5`.
+- Суть: гейт L5 — `hasDocs(s.Docs)` вместо `!shortCircuit(L4)`; `FAIL` на L4 не
+  пропускает L5, а ограничивает итог сверху до `PARTIAL` (`capL5ByL4` внутри
+  `mergeOutcomes`).
+- **Реализация (Sonnet):**
+  - `internal/slice/assess/logic.go`: удалить `shortCircuit`; добавить
+    `hasDocs(docs) bool` и приватный лист `capL5ByL4(l5, l4) map` (FAIL L4 → PASS L5
+    → PARTIAL; FAIL/PARTIAL L5 и Score/Gaps не трогаем; `l4==nil` → noop); вызвать
+    его в `mergeOutcomes` при формировании jtbd из L5.
+  - `internal/slice/assess/head.go`: гейт `if plan.L5 && hasDocs(s.Docs)`; убрать
+    `shortCircuit`. Голова без новых I/O.
+  - Юниты: `hasDocs` (есть/нет docs); `capL5ByL4` (3 ветки); `mergeOutcomes` —
+    ветка «L5 с кэпом». Голова не юнитится.
+  - **Фикстура `component-tests/testdata/repo-soft`**: README присутствует, L1/L3/L6
+    чисты (без blocker-violations), L4 проваливает роль `agent` (нет карты файлов/
+    структуры под ИИ-агента), прочие роли проходят. Под сценарий «docs есть, статика
+    частично провалена, ИИ годен → PARTIAL, код 0».
+  - `component-tests/features/assess.feature` (обновлён): сценарий `repo-soft`
+    (healthy → agent PARTIAL, код 0) зелёный; сценарий `repo-bad` переведён на режим
+    стаба `bad_repo` (ИИ подтверждает провал → код 1) зелёный; happy `repo-good`
+    без изменений.
+- **DoD:** локальный CI зелёный (gofmt/vet/unit/component); `shortCircuit` удалён из
+  кода и графа; grep-самопроверки дисциплины чисты; `backlog.md`/`devlog.md`/
+  корневой `CLAUDE.md`+`backlog.md` обновлены.
 
 ### TICKET S8 — drift --semantic (ПОЗДНИЙ, опциональный)
 - Спека: `slices/08-drift-semantic.md` (эскиз). Зависимости: S6 + S5 (LLMClient).
