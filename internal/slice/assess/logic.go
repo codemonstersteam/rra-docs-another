@@ -1,5 +1,5 @@
 // Package assess реализует слайс S7 — полный пайплайн аудита L1/L3/L4/L5/L6a.
-// Порядок: дешёвое-первым; L5 условно (plan≥L5 && !shortCircuit(L4)).
+// Порядок: дешёвое-первым; L5 условно (plan≥L5 && hasDocs(s.Docs)).
 // Новых I/O нет. Чистые листья — Evaluate каждого слайса из E15.
 package assess
 
@@ -43,16 +43,25 @@ func layersUpTo(upTo string) LayerPlan {
 	}
 }
 
-// shortCircuit возвращает true, если хотя бы один L4-результат FAIL.
-// При FAIL L4 → L5/LLM не запускается.
-// Пустая карта (L4 вне плана) → false.
-func shortCircuit(l4 map[string]domain.JTBDResult) bool {
-	for _, r := range l4 {
-		if r.Status == "FAIL" {
-			return true
+// hasDocs возвращает true, если документация присутствует — тогда L5/LLM
+// запускается. Пустой набор → false (оценивать нечего, L5 пропускается).
+func hasDocs(docs []domain.MarkdownDoc) bool {
+	return len(docs) > 0
+}
+
+// capL5ByL4 ограничивает итог L5 статикой L4: для роли с FAIL на L4 статус PASS
+// на L5 понижается до PARTIAL (нельзя заявить полный PASS при отсутствующей
+// обязательной секции). FAIL/PARTIAL L5 и Score/Gaps сохраняются; роли без FAIL
+// на L4 (или при l4 == nil) — без изменений. Чистая функция, без I/O.
+func capL5ByL4(l5, l4 map[string]domain.JTBDResult) map[string]domain.JTBDResult {
+	capped := make(map[string]domain.JTBDResult, len(l5))
+	for role, r := range l5 {
+		if l4[role].Status == "FAIL" && r.Status == "PASS" {
+			r.Status = "PARTIAL"
 		}
+		capped[role] = r
 	}
-	return false
+	return capped
 }
 
 // mergeOutcomes собирает единый Report из плана и исполненных оценок.
@@ -85,10 +94,12 @@ func mergeOutcomes(plan LayerPlan, target domain.AuditTarget, out layerOutcomes)
 		layers["L6"] = domain.LayerResult{Name: "drift", Status: "skipped"}
 	}
 
+	// jtbd = L5 (с кэпом статикой L4) ?? L4. capL5ByL4 — приватный лист merge:
+	// FAIL на L4 ограничивает PASS L5 до PARTIAL.
 	var jtbd map[string]domain.JTBDResult
 	switch {
 	case out.l5 != nil:
-		jtbd = out.l5
+		jtbd = capL5ByL4(out.l5, out.l4)
 	case out.l4 != nil:
 		jtbd = out.l4
 	}
