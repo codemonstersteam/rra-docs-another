@@ -68,7 +68,7 @@ S6 `drift` (L6a) и **S7 `assess`** (полный пайплайн L1/L3/L4/L5/L
   `gopkg.in/yaml.v3`. Секретов нет — `llm.api_key_env` указывает имя env-переменной,
   ключ из env. Загрузчик — общая инфраструктура в `internal/cli`. См. ADR 0003.
 - LLM провайдер-агностичен: `anthropic` (дефолт) / `openai` (любой OpenAI-совм.
-  эндпоинт через `--llm-base-url`). См. `rationaldev` ADR 0001. Резолвинг
+  эндпоинт через `--llm-base-url`). См. `rra` ADR 0001. Резолвинг
   `baseURL`/`model`/`provider` — только в `domain.NewLLMConfig` (флаг > YAML > вшитый
   дефолт, anthropic → `/v1`); I/O-клиент берёт готовые значения, ничего не хардкодит.
 - **Spec-first egress.** Любой исходящий HTTP к дозируемому сервису (LLM, будущие

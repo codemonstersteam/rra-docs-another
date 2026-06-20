@@ -166,13 +166,13 @@ prompt caching) и `openai` (любой OpenAI-совместимый эндпо
 `--llm-base-url`: OpenAI, Azure, шлюзы OpenRouter/Together/Groq, локальные
 Ollama/vLLM/LM Studio). Конфиг: `--llm-provider`, `--llm-base-url`, `--llm-model`;
 ключ из env. Логика видит только доменный метод; ошибки любого провайдера
-маппятся в `llm_*`-коды. Подробнее — `rationaldev` ADR 0001 «LLM provider-agnostic».
+маппятся в `llm_*`-коды. Подробнее — `rra` ADR 0001 «LLM provider-agnostic».
 
 ## Связь с другими репозиториями RRA
 
 Все репозитории — под [github.com/codemonstersteam](https://github.com/codemonstersteam/):
 
-- **`rationaldev`** — зонтичная концепция RRA, оба критерия, стратегия итераций.
+- **`rra`** — зонтичная концепция RRA, оба критерия, стратегия итераций.
 - **`rra-docs`** — узкий **гейт соответствия дисциплине** (детерминированно, без
   LLM); применяется в CI на дисциплинарных проектах. Содержит бывший L6b.
   [github.com/codemonstersteam/rra-docs](https://github.com/codemonstersteam/rra-docs)
