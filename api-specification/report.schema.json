@@ -171,7 +171,9 @@
             "tool_failed",
             "llm_rate_limited",
             "llm_unavailable",
-            "llm_budget_exceeded"
+            "llm_budget_exceeded",
+            "format_invalid",
+            "report_write_failed"
           ],
           "description": "Код режима отказа. Полная карта — README «Карта режимов отказа»."
         },

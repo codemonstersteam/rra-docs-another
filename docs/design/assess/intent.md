@@ -10,6 +10,8 @@ JTBD-потребителей: выдать четыре независимых 
   [`report.schema.json`](../../../api-specification/report.schema.json).
 - Исполняемая спецификация: `component-tests/features/*.feature` (гейт E1 в main).
 - Концепция слоёв L1–L6 и JTBD: [`CONCEPT.md`](../../../CONCEPT.md).
+- Архитектура: [`c4.md`](c4.md) (C2/C3 + системные use case по Коберну),
+  [`infrastructure.md`](infrastructure.md), сквозной выход — [`egress.md`](egress.md).
 - Один внешний вход = одна подкоманда = один slice. Семь слайсов (S1–S7) +
   поздний S8 (`drift --semantic`, тир L6c).
 

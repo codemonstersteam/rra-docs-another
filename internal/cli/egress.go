@@ -33,6 +33,7 @@ func mapError(err error) domain.Error {
 	repoStore := "RepoStore"
 	linterRunner := "LinterRunner"
 	llmClient := "LLMClient"
+	reportSink := "ReportSink"
 
 	table := []entry{
 		{domain.ErrPathNotFound, "path_not_found", &repoStore},
@@ -43,6 +44,8 @@ func mapError(err error) domain.Error {
 		{domain.ErrLLMRateLimited, "llm_rate_limited", &llmClient},
 		{domain.ErrLLMUnavailable, "llm_unavailable", &llmClient},
 		{domain.ErrLLMBudgetExceeded, "llm_budget_exceeded", &llmClient},
+		{domain.ErrUnknownFormat, "format_invalid", nil},
+		{domain.ErrReportWrite, "report_write_failed", &reportSink},
 	}
 
 	for _, e := range table {
