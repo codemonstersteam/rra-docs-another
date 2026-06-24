@@ -41,17 +41,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		usage(stdout)
 		return 0
 	case "structure":
-		return runStructureCmd(args[1:], stdout, stderr)
+		return runStructureCmd(args[1:], stderr)
 	case "readability":
-		return runReadabilityCmd(args[1:], stdout, stderr)
+		return runReadabilityCmd(args[1:], stderr)
 	case "jtbd":
-		return runJTBDCmd(args[1:], stdout, stderr)
+		return runJTBDCmd(args[1:], stderr)
 	case "fitness":
-		return runFitnessCmd(args[1:], stdout, stderr)
+		return runFitnessCmd(args[1:], stderr)
 	case "drift":
-		return runDriftCmd(args[1:], stdout, stderr)
+		return runDriftCmd(args[1:], stderr)
 	case "assess":
-		return runAssessCmd(args[1:], stdout, stderr)
+		return runAssessCmd(args[1:], stderr)
 	default:
 		if isTodoSubcommand(cmd) {
 			fmt.Fprintf(stderr, "rra-docs-another: подкоманда %q ещё не реализована (см. PLAN.md)\n", cmd)
@@ -64,7 +64,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 }
 
 // runStructureCmd — точка входа подкоманды structure в CLI-роутере.
-func runStructureCmd(args []string, stdout, stderr io.Writer) int {
+func runStructureCmd(args []string, stderr io.Writer) int {
 	req, err := structure.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another structure: %v\n", err)
@@ -75,11 +75,11 @@ func runStructureCmd(args []string, stdout, stderr io.Writer) int {
 	sink := iodep.NewReportSink()
 
 	report, runErr := structure.ProcessStructure(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
 // runReadabilityCmd — точка входа подкоманды readability в CLI-роутере.
-func runReadabilityCmd(args []string, stdout, stderr io.Writer) int {
+func runReadabilityCmd(args []string, stderr io.Writer) int {
 	req, err := readability.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another readability: %v\n", err)
@@ -90,11 +90,11 @@ func runReadabilityCmd(args []string, stdout, stderr io.Writer) int {
 	sink := iodep.NewReportSink()
 
 	report, runErr := readability.ProcessReadability(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
 // runJTBDCmd — точка входа подкоманды jtbd в CLI-роутере.
-func runJTBDCmd(args []string, stdout, stderr io.Writer) int {
+func runJTBDCmd(args []string, stderr io.Writer) int {
 	req, err := jtbd.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another jtbd: %v\n", err)
@@ -105,11 +105,11 @@ func runJTBDCmd(args []string, stdout, stderr io.Writer) int {
 	sink := iodep.NewReportSink()
 
 	report, runErr := jtbd.ProcessJTBD(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
 // runFitnessCmd — точка входа подкоманды fitness в CLI-роутере.
-func runFitnessCmd(args []string, stdout, stderr io.Writer) int {
+func runFitnessCmd(args []string, stderr io.Writer) int {
 	req, err := fitness.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another fitness: %v\n", err)
@@ -120,25 +120,25 @@ func runFitnessCmd(args []string, stdout, stderr io.Writer) int {
 
 	cfg, cfgErr := domain.NewConfig(req)
 	if cfgErr != nil {
-		return egress(domain.Report{}, cfgErr, req, sink, stdout)
+		return egress(domain.Report{}, cfgErr, req, sink)
 	}
 
 	// Резолвим и валидируем LLM-подключение здесь (fail-fast по ключу/провайдеру
 	// до дорогого I/O); baseURL/model берутся из конфига, клиент их не хардкодит.
 	llmCfg, llmErr := domain.NewLLMConfig(req, cfg)
 	if llmErr != nil {
-		return egress(domain.Report{}, llmErr, req, sink, stdout)
+		return egress(domain.Report{}, llmErr, req, sink)
 	}
 
 	deps := fitness.NewDeps(cfg, llmCfg)
 
 	report, runErr := fitness.ProcessFitness(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
 // runDriftCmd — точка входа подкоманды drift в CLI-роутере.
 // Решение --semantic (выбор Judge) принимается здесь, не в голове слайса.
-func runDriftCmd(args []string, stdout, stderr io.Writer) int {
+func runDriftCmd(args []string, stderr io.Writer) int {
 	req, err := drift.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another drift: %v\n", err)
@@ -152,23 +152,23 @@ func runDriftCmd(args []string, stdout, stderr io.Writer) int {
 	if req.Semantic {
 		cfg, cfgErr := domain.NewConfig(req)
 		if cfgErr != nil {
-			return egress(domain.Report{}, cfgErr, req, sink, stdout)
+			return egress(domain.Report{}, cfgErr, req, sink)
 		}
 		llmCfg, llmErr := domain.NewLLMConfig(req, cfg)
 		if llmErr != nil {
-			return egress(domain.Report{}, llmErr, req, sink, stdout)
+			return egress(domain.Report{}, llmErr, req, sink)
 		}
 		_ = llmCfg // LLMClient.Judge подключается в S8
 	}
 
 	deps := drift.NewDeps(judge)
 	report, runErr := drift.ProcessDrift(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
 // runAssessCmd — точка входа подкоманды assess в CLI-роутере.
 // LLMConfig резолвится внутри ProcessAssess по ветке L5 (условный).
-func runAssessCmd(args []string, stdout, stderr io.Writer) int {
+func runAssessCmd(args []string, stderr io.Writer) int {
 	req, err := assess.ParseArgs(args, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "rra-docs-another assess: %v\n", err)
@@ -179,21 +179,35 @@ func runAssessCmd(args []string, stdout, stderr io.Writer) int {
 	sink := iodep.NewReportSink()
 
 	report, runErr := assess.ProcessAssess(req, deps)
-	return egress(report, runErr, req, sink, stdout)
+	return egress(report, runErr, req, sink)
 }
 
-// egress — общий выход: форматирует отчёт (успех или ошибку) и возвращает код.
-func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink, stdout io.Writer) int {
+// egress — общий выход (ингресс-адаптер CLI): собирает ReportOutput из отчёта и
+// req (рендер по req.Format + назначение по req.Out), пишет трубой и возвращает
+// код. «Куда писать» = req.Out, без stdout-параметра сбоку. См. docs/design/assess/egress.md.
+func egress(report domain.Report, err error, req domain.Request, sink iodep.ReportSink) int {
 	if err != nil {
 		report = buildErrorReport(req, err)
 	}
-	// Если out = "-", пишем в переданный stdout (а не os.Stdout).
-	writeErr := sink.WriteTo(report, req.Format, stdout)
-	if writeErr != nil {
-		// Запись в stdout не удалась — молча продолжаем (маловероятно).
-		_ = writeErr
+	out, buildErr := domain.NewReportOutput(report, req)
+	if buildErr != nil {
+		return emitError(sink, req, buildErr) // напр. неизвестный --format
+	}
+	if writeErr := sink.Write(out); writeErr != nil {
+		return emitError(sink, req, writeErr) // напр. файл недоступен
 	}
 	return exitCode(report)
+}
+
+// emitError рендерит доменную ошибку как JSON в stdout (надёжный фолбэк, когда
+// исходный вывод не удался) и возвращает её код возврата.
+func emitError(sink iodep.ReportSink, req domain.Request, err error) int {
+	report := buildErrorReport(req, err)
+	safe := domain.Request{Command: req.Command, Path: req.Path, Format: "json", Out: "-"}
+	if out, e := domain.NewReportOutput(report, safe); e == nil {
+		_ = sink.Write(out)
+	}
+	return exitCode(report) // Errors присутствуют → 2
 }
 
 func isTodoSubcommand(name string) bool {

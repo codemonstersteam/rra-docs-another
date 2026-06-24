@@ -18,6 +18,7 @@ func (w *World) registerCLISteps(ctx *godog.ScenarioContext) {
 	// Запуск
 	ctx.Step(`^запускаю бинарь с аргументами "([^"]*)"$`, w.runRaw)
 	ctx.Step(`^запускаю "([^"]+)" на репозитории "([^"]+)"$`, w.runOnRepo)
+	ctx.Step(`^запускаю "([^"]+)" на репозитории "([^"]+)" с выводом в "([^"]*)"$`, w.runOnRepoWithOut)
 	ctx.Step(`^LLM-стаб в режиме "([^"]+)"$`, w.setStubMode)
 	ctx.Step(`^ключ LLM не задан в окружении$`, w.setNoLLMKey)
 	ctx.Step(`^битый файл конфигурации$`, w.setBrokenConfig)
@@ -34,6 +35,14 @@ func (w *World) registerCLISteps(ctx *godog.ScenarioContext) {
 
 func (w *World) runRaw(ctx context.Context, args string) error {
 	return w.run(ctx, strings.Fields(args))
+}
+
+// runOnRepoWithOut запускает подкоманду с флагом --out <path> — для проверки
+// записи отчёта (egress). Путь берётся как есть (может быть заведомо
+// недоступным — сценарий отказа записи).
+func (w *World) runOnRepoWithOut(ctx context.Context, cmd, fixture, out string) error {
+	args := []string{cmd, filepath.Join(w.testdataDir, fixture), "--format", "json", "--out", out}
+	return w.run(ctx, args)
 }
 
 func (w *World) runOnRepo(ctx context.Context, cmd, fixture string) error {

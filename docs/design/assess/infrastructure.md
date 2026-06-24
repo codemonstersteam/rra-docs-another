@@ -48,7 +48,7 @@ Register(router *cli.Router, deps Deps):
         | req, err := ParseArgs(args, stderr)        # adapter.go
         | if err != nil { … return 2 }
         | report, runErr := Process<Slice>(req, deps) # head.go
-        | return report.Egress(report, runErr, req, deps.Sink, stdout)  # общий egress
+        | return report.Egress(report, runErr, req, deps.Sink)  # общий egress (stdout не нужен — куда писать = req.Out)
     })
 ```
 
@@ -57,16 +57,23 @@ Register(router *cli.Router, deps Deps):
 Один на все слайсы — отчёт у тула машинно-единый (одна схема, один набор
 `error.code`), поэтому egress общий, а не per-slice mapError как в HTTP-эталоне.
 
+> **Рефактор по уроку D1 — авторитетная карта в [`egress.md`](egress.md).** Ниже —
+> итоговая форма; детали контрактов, графа и тестов там.
+
 ```
-Egress(report, err, req, sink, stdout) -> int:
+Egress(report, err, req, sink) -> int:
     | если err != nil: report = buildErrorReport(req, err)   # sentinel → Error{code}
-    | sink.Write(report, req.Format, req.Out|stdout)         # io.ReportSink
+    | NewReportOutput(report, req) -> ReportOutput           # рендер + назначение (req.Out/req.Format)
+    | sink.Write(out)              -> error                  # io.ReportSink (труба, 1 вход)
+    | при ошибке записи: код 2
     | return exitCode(report)                                # 0/1/2
 ```
 
 `buildErrorReport` и `exitCode` — чистые функции (юнитятся). Правило `exitCode`:
 `Errors` → 2; иначе blocker-`Violation` или JTBD `FAIL` → 1; иначе 0. Нарушения
 `layer:"L1"` никогда не blocker → `readability` сам по себе кода 1 не даёт.
+«Куда писать» = `req.Out` (нет `stdout`-параметра сбоку); рендер вынесен из
+`ReportSink` в `internal/report`; `ReportSink.Write(out ReportOutput)` — один вход.
 
 ## Общая инфраструктура (общие пакеты)
 
@@ -87,7 +94,7 @@ Egress(report, err, req, sink, stdout) -> int:
 | `RepoStore` | ФС / git | `ReadMarkdownDocs(AuditTarget) -> ([]MarkdownDoc, error)`; `ReadStructure(AuditTarget) -> (RepoStructure, error)` | S1,S2,S3,S6,S7 |
 | `LinterRunner` | subprocess Vale / markdownlint | `Run(AuditTarget) -> (StyleFindings, error)` — сканирует директорию (без цикла в голове) | S4,S7 |
 | `LLMClient` | LLM (anthropic / openai-совм.) | `Simulate(JTBDPromptSet) -> ([]LLMVerdict, error)` — фан-аут 4 ролей внутри объекта; `Judge(ClaimPrompt) -> (Verdict, error)` (S8) | S5,S7,S8 |
-| `ReportSink` | stdout / файл | `Write(Report, format, out) -> error` | все (через egress) |
+| `ReportSink` | stdout / файл | `Write(out ReportOutput) -> error` — труба, 1 вход (рендер/назначение собраны до неё в `internal/report`, см. `egress.md`) | все (через egress) |
 
 Правила: в `Dependencies:`/`Deps` — только эти объекты, не сырые `*os`/`*exec`/`*http`.
 Каждый метод — труба (одно сообщение → внешний вызов → результат/доменная ошибка);

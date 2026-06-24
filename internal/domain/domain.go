@@ -29,6 +29,8 @@ var (
 	ErrLLMRateLimited    = errors.New("llm_rate_limited")
 	ErrLLMUnavailable    = errors.New("llm_unavailable")
 	ErrLLMBudgetExceeded = errors.New("llm_budget_exceeded")
+	ErrUnknownFormat     = errors.New("format_invalid")
+	ErrReportWrite       = errors.New("report_write_failed")
 )
 
 // ── Невалидированный вход ────────────────────────────────────────────────────
